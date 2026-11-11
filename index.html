@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>יומן מסחר – משמעת ועקביות</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>יומן מסחר</h1>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-view="today" aria-selected="true">היום</button>
+    <button role="tab" data-view="dashboard" aria-selected="false">סיכום</button>
+    <button role="tab" data-view="trades" aria-selected="false">עסקאות</button>
+    <button role="tab" data-view="rules" aria-selected="false">חוקים</button>
+    <button role="tab" data-view="data" aria-selected="false">גיבוי</button>
+  </nav>
+  <button id="btn-new" class="primary">+ עסקה חדשה</button>
+</header>
+
+<section class="filters" id="filters" hidden>
+  <label>מתאריך <input type="date" id="f-from"></label>
+  <label>עד תאריך <input type="date" id="f-to"></label>
+  <label>סטאפ <select id="f-setup"><option value="">הכול</option></select></label>
+  <label>תוצאה
+    <select id="f-result">
+      <option value="">הכול</option>
+      <option value="win">רווח</option>
+      <option value="loss">הפסד</option>
+    </select>
+  </label>
+  <button id="f-clear" class="ghost">נקה סינון</button>
+</section>
+
+<main>
+  <section id="view-today" class="view">
+    <p class="motto">המטרה היום היא 100/100, לא כסף.</p>
+    <div id="lock" class="banner" hidden></div>
+    <div class="grid2">
+      <div class="card">
+        <h2>יום המסחר</h2>
+        <div class="fgrid">
+          <label>תאריך <input type="date" id="d-date"></label>
+          <label>מצב רגשי (1–10) <input type="number" id="d-mood" min="1" max="10" step="1"></label>
+        </div>
+        <h3>צ'קליסט לפני סשן</h3>
+        <div id="d-check" class="checklist"></div>
+        <label>מה למדתי היום <textarea id="d-learned" rows="3"></textarea></label>
+        <div class="row end"><span id="d-saved" class="muted"></span><button id="d-save" class="primary">שמירת היום</button></div>
+      </div>
+      <div class="card">
+        <h2>מצב היום</h2>
+        <div class="tiles small" id="d-tiles"></div>
+        <h3>עמידה בחוקים</h3>
+        <ul id="d-rules" class="rules-status"></ul>
+      </div>
+    </div>
+    <div class="card table-wrap"><table id="days-table">
+      <thead><tr><th>תאריך</th><th>מצב רגשי</th><th>עסקאות</th><th>ציון ממוצע</th><th>רווח/הפסד</th><th>חוקים שנשברו</th><th>מה למדתי</th></tr></thead>
+      <tbody></tbody></table></div>
+  </section>
+
+  <section id="view-dashboard" class="view" hidden>
+    <div class="grid2">
+      <div class="card"><h2 id="phase-title">התקדמות בשלב</h2><div id="phase"></div></div>
+      <div class="card"><h2>סיכום שבועי</h2><div id="week"></div></div>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="card">
+      <h2>ציון משמעת יומי (ממוצע לכל יום מסחר)</h2>
+      <div id="scores" class="chart"></div>
+    </div>
+    <div class="card">
+      <h2>עקומת הון (רווח/הפסד מצטבר, $)</h2>
+      <div id="equity" class="chart"></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h2>רווח/הפסד: 100/100 מול עסקאות ששברו חוק</h2><div id="by-plan"></div></div>
+      <div class="card"><h2>רווח/הפסד לפי סטאפ</h2><div id="by-setup"></div></div>
+      <div class="card"><h2>עלות הטעויות</h2><div id="by-mistake"></div></div>
+      <div class="card"><h2>רווח/הפסד לפי מצב רגשי בכניסה</h2><div id="by-emotion"></div></div>
+      <div class="card"><h2>רווח/הפסד לפי יום בשבוע</h2><div id="by-day"></div></div>
+    </div>
+  </section>
+
+  <section id="view-trades" class="view" hidden>
+    <div class="card table-wrap">
+      <table id="trades-table">
+        <thead><tr>
+          <th>תאריך</th><th>נכס</th><th>כיוון</th><th>חוזים</th><th>כניסה</th><th>יציאה</th>
+          <th>נק׳</th><th>רווח/הפסד</th><th>R</th><th>ציון</th><th>סטאפ</th><th>טעויות</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p id="empty" class="muted" hidden>אין עדיין עסקאות. לחץ על ״עסקה חדשה״ כדי להתחיל.</p>
+    </div>
+  </section>
+
+  <section id="view-rules" class="view" hidden>
+    <div class="grid2">
+      <div class="card"><h2>החוקים שלי</h2><ol id="rules-list" class="plain"></ol></div>
+      <div>
+        <div class="card">
+          <h2>פרוטוקול אחרי הפסד</h2>
+          <p class="quote">אני לא צריך להחזיר את ההפסד היום. אני צריך לבצע נכון את העסקה הבאה.</p>
+          <ol class="plain">
+            <li>סטופ נפגע → ידיים מהעכבר.</li>
+            <li>קם מהמסך ל־15 דקות לפחות.</li>
+            <li>כותב ביומן מה הרגשתי ואיזה משפט עבר לי בראש.</li>
+            <li>נותן ציון לעסקה. אם היא הייתה 100/100, ביצעתי נכון.</li>
+            <li>חוזר רק אם המצב הרגשי 6 ומעלה, ורק לסטאפ מלא.</li>
+            <li>הפסד שני → סוגר את היום.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h2>הגדרות השלב הנוכחי</h2>
+          <div class="fgrid">
+            <label>שלב
+              <select id="s-phase"><option value="1">שלב 1 – מיקרו</option><option value="2">שלב 2 – סיכון מלא</option><option value="3">שלב 3 – הגדלה</option></select>
+            </label>
+            <label>תאריך תחילת השלב <input type="date" id="s-start"></label>
+            <label>סיכון מקסימלי לעסקה ($) <input type="number" id="s-risk" min="1" step="1"></label>
+            <label>הפסד יומי מקסימלי ($) <input type="number" id="s-maxLoss" min="1" step="1"></label>
+            <label>יעד יומי לסיום ($) <input type="number" id="s-target" min="1" step="1"></label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="view-data" class="view" hidden>
+    <div class="card">
+      <h2>גיבוי ושחזור</h2>
+      <p class="muted">הנתונים נשמרים בדפדפן הזה בלבד. מומלץ לייצא גיבוי באופן קבוע.</p>
+      <div class="row">
+        <button id="btn-export">ייצוא גיבוי מלא (JSON)</button>
+        <button id="btn-csv">ייצוא עסקאות לאקסל (CSV)</button>
+        <label class="btn">ייבוא גיבוי <input type="file" id="in-import" accept="application/json" hidden></label>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <form id="form" method="dialog">
+    <h2 id="dlg-title">עסקה חדשה</h2>
+    <fieldset><legend>פרטי העסקה</legend>
+      <div class="fgrid">
+        <label>תאריך <input type="date" name="date" required></label>
+        <label>שעה <input type="time" name="time"></label>
+        <label>נכס
+          <select name="symbol"><option value="MNQ">MNQ ($2 לנקודה)</option><option value="NQ">NQ ($20 לנקודה)</option></select>
+        </label>
+        <label>כיוון
+          <select name="dir"><option value="long">לונג</option><option value="short">שורט</option></select>
+        </label>
+        <label>חוזים <input type="number" name="qty" min="1" step="1" value="1" required></label>
+        <label>עמלות ($) <input type="number" name="fees" min="0" step="0.01" value="0"></label>
+      </div>
+    </fieldset>
+    <fieldset><legend>מחירים וניהול סיכונים</legend>
+      <div class="fgrid">
+        <label>כניסה <input type="number" name="entry" step="0.25" required></label>
+        <label>סטופ <input type="number" name="stop" step="0.25" required></label>
+        <label>יעד <input type="number" name="target" step="0.25"></label>
+        <label>יציאה <input type="number" name="exit" step="0.25" required></label>
+      </div>
+      <div id="calc" class="calc" aria-live="polite"></div>
+    </fieldset>
+    <fieldset><legend>ציון 100/100</legend>
+      <div id="score" class="checklist"></div>
+      <div class="calc">ציון העסקה: <b id="score-total" class="num">0</b></div>
+    </fieldset>
+    <fieldset><legend>אסטרטגיה ופסיכולוגיה</legend>
+      <div class="fgrid">
+        <label>סטאפ <input name="setup" list="setups"></label>
+        <datalist id="setups"></datalist>
+        <label>מצב רגשי בכניסה
+          <select name="emotion">
+            <option value="">—</option><option>רגוע</option><option>ממוקד</option><option>בטוח מדי</option>
+            <option>מהסס</option><option>FOMO</option><option>נקמה</option><option>עייף</option><option>לחוץ</option>
+          </select>
+        </label>
+      </div>
+      <div class="chips" id="mistakes"></div>
+      <label>מה הרגשתי ואיזה משפט עבר לי בראש <textarea name="notes" rows="2"></textarea></label>
+      <label>לקח לפעם הבאה <textarea name="lesson" rows="2"></textarea></label>
+    </fieldset>
+    <fieldset><legend>צילומי מסך</legend>
+      <input type="file" id="in-img" accept="image/*" multiple>
+      <div id="thumbs" class="thumbs"></div>
+    </fieldset>
+    <div class="row end">
+      <button type="button" id="btn-cancel" class="ghost">ביטול</button>
+      <button type="submit" class="primary">שמירה</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="viewer"><img id="viewer-img" alt="צילום מסך של העסקה"></dialog>
+<div id="tip" class="tip" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
