@@ -479,6 +479,8 @@ function updateForm() {
   const e = $('#form').elements;
   $('#score-total').textContent = scoreOf(readForm()) + ' / 100';
   $('#broken-box').hidden = e.kept.value !== 'no';
+  // Typing a minus sign (e.g. -1R or -50) marks the trade as a loss on its own.
+  if (Number(e.amount.value) < 0 || Number(e.r.value) < 0) e.res.value = 'loss';
   const be = e.res.value === 'be';
   e.amount.required = !be;
   if (be) { e.amount.value = 0; e.r.value = 0; }
