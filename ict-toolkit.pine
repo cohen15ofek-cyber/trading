@@ -1,0 +1,273 @@
+//@version=5
+indicator("ICT Toolkit — Killzones, Pivots, NWOG/NDOG, True Opens",
+     shorttitle = "ICT Toolkit",
+     overlay = true,
+     max_boxes_count = 500,
+     max_lines_count = 500,
+     max_labels_count = 500)
+
+// All session times are New York time (America/New_York)
+tz = "America/New_York"
+
+// ================== General ==================
+gGen = "General"
+daysBack = input.int(7, "Days to display (calendar days)", minval = 1, maxval = 30, group = gGen)
+inRange = time > last_bar_time - daysBack * 86400000
+
+// ================== Killzones ==================
+gKZ = "Killzones (NY time)"
+showKZ    = input.bool(true, "Show killzone boxes", group = gKZ)
+showKZLbl = input.bool(true, "Show killzone names", group = gKZ)
+kzTransp  = input.int(85, "Box fill transparency", minval = 0, maxval = 100, group = gKZ)
+
+showAsia = input.bool(true, "", inline = "kz1", group = gKZ)
+nameAsia = input.string("ASIA", "", inline = "kz1", group = gKZ)
+sessAsia = input.session("2000-0000", "", inline = "kz1", group = gKZ)
+colAsia  = input.color(#6f7bea, "", inline = "kz1", group = gKZ)
+
+showLndn = input.bool(true, "", inline = "kz2", group = gKZ)
+nameLndn = input.string("LNDN", "", inline = "kz2", group = gKZ)
+sessLndn = input.session("0200-0500", "", inline = "kz2", group = gKZ)
+colLndn  = input.color(#f2545b, "", inline = "kz2", group = gKZ)
+
+showPre = input.bool(true, "", inline = "kz3", group = gKZ)
+namePre = input.string("Pre Session", "", inline = "kz3", group = gKZ)
+sessPre = input.session("0800-0930", "", inline = "kz3", group = gKZ)
+colPre  = input.color(#9598a1, "", inline = "kz3", group = gKZ)
+
+showNyam = input.bool(true, "", inline = "kz4", group = gKZ)
+nameNyam = input.string("NYAM", "", inline = "kz4", group = gKZ)
+sessNyam = input.session("0930-1100", "", inline = "kz4", group = gKZ)
+colNyam  = input.color(#53b987, "", inline = "kz4", group = gKZ)
+
+showNypm = input.bool(true, "", inline = "kz5", group = gKZ)
+nameNypm = input.string("NYPM", "", inline = "kz5", group = gKZ)
+sessNypm = input.session("1330-1600", "", inline = "kz5", group = gKZ)
+colNypm  = input.color(#d357e0, "", inline = "kz5", group = gKZ)
+
+// ================== Session Pivots ==================
+gPV = "Session Pivots (TFO style)"
+showPV = input.bool(true, "Show session High/Low pivots", group = gPV)
+maxPV  = input.int(30, "Max pivot lines on chart", minval = 4, maxval = 100, group = gPV)
+
+// ================== Opening Gaps ==================
+gGap = "Opening Gaps (NWOG / NDOG)"
+showNWOG   = input.bool(true, "Show NWOG", inline = "g1", group = gGap)
+nwogCount  = input.int(5, "Amount", minval = 1, maxval = 10, inline = "g1", group = gGap)
+colNWOG    = input.color(#787b86, "", inline = "g1", group = gGap)
+showNDOG   = input.bool(true, "Show NDOG", inline = "g2", group = gGap)
+ndogCount  = input.int(3, "Amount", minval = 1, maxval = 10, inline = "g2", group = gGap)
+colNDOG    = input.color(#b2771d, "", inline = "g2", group = gGap)
+showGapEQ  = input.bool(true, "Show gap midline (C.E.)", group = gGap)
+showGapLbl = input.bool(true, "Show gap labels", group = gGap)
+
+// ================== True Opens ==================
+gTO = "True Opens (NY time)"
+toDays = input.int(1, "History (days)", minval = 1, maxval = 10, group = gTO)
+
+showTDO = input.bool(true, "True Day Open   ", inline = "to1", group = gTO)
+hTDO    = input.int(0, "", minval = 0, maxval = 23, inline = "to1", group = gTO)
+mTDO    = input.int(0, "", minval = 0, maxval = 59, inline = "to1", group = gTO)
+colTDO  = input.color(#787b86, "", inline = "to1", group = gTO)
+
+showTAO = input.bool(true, "True Asia Open  ", inline = "to2", group = gTO)
+hTAO    = input.int(20, "", minval = 0, maxval = 23, inline = "to2", group = gTO)
+mTAO    = input.int(0, "", minval = 0, maxval = 59, inline = "to2", group = gTO)
+colTAO  = input.color(#6f7bea, "", inline = "to2", group = gTO)
+
+showTLO = input.bool(true, "True London Open", inline = "to3", group = gTO)
+hTLO    = input.int(2, "", minval = 0, maxval = 23, inline = "to3", group = gTO)
+mTLO    = input.int(0, "", minval = 0, maxval = 59, inline = "to3", group = gTO)
+colTLO  = input.color(#f2545b, "", inline = "to3", group = gTO)
+
+showTNO = input.bool(true, "True NY Open    ", inline = "to4", group = gTO)
+hTNO    = input.int(9, "", minval = 0, maxval = 23, inline = "to4", group = gTO)
+mTNO    = input.int(30, "", minval = 0, maxval = 59, inline = "to4", group = gTO)
+colTNO  = input.color(#53b987, "", inline = "to4", group = gTO)
+
+// ================== Helpers ==================
+
+// True when current bar is the first bar at/after H:M (NY time) of its calendar day
+f_atTime(_h, _m) =>
+    t = timestamp(tz, year(time, tz), month(time, tz), dayofmonth(time, tz), _h, _m, 0)
+    time >= t and (na(time[1]) ? false : time[1] < t)
+
+// Killzone box: tracks session hi/lo, draws box + name label.
+// Returns [sessionJustEnded, sessionHigh, sessionLow]
+f_kz(_show, _name, _sess, _col) =>
+    sessT  = time(timeframe.period, _sess, tz)
+    inSess = not na(sessT)
+    prevIn = not na(sessT[1])
+    startBar = inSess and not prevIn
+    endBar   = not inSess and prevIn
+    var float hi = na
+    var float lo = na
+    var box bx = na
+    var label lb = na
+    if startBar
+        hi := high
+        lo := low
+    else if inSess
+        hi := math.max(hi, high)
+        lo := math.min(lo, low)
+    if showKZ and _show and inRange
+        if startBar
+            bx := box.new(bar_index, hi, bar_index, lo,
+                 border_color = color.new(_col, 40),
+                 bgcolor = color.new(_col, kzTransp),
+                 border_width = 1)
+            if showKZLbl
+                lb := label.new(bar_index, hi, _name,
+                     style = label.style_label_down,
+                     color = color.new(_col, 100),
+                     textcolor = _col,
+                     size = size.small)
+        else if inSess and not na(bx)
+            box.set_top(bx, hi)
+            box.set_bottom(bx, lo)
+            box.set_right(bx, bar_index)
+            if not na(lb)
+                label.set_y(lb, hi)
+                label.set_x(lb, int(math.avg(box.get_left(bx), bar_index)))
+    [endBar, hi, lo]
+
+// ---- Session pivot storage (shared) ----
+var pvLines  = array.new<line>()
+var pvLabels = array.new<label>()
+var pvPrice  = array.new<float>()
+var pvIsHigh = array.new<bool>()
+var pvActive = array.new<bool>()
+
+f_addPivot(_name, _price, _isHigh, _col) =>
+    ln = line.new(bar_index - 1, _price, bar_index, _price, color = _col, width = 1)
+    lb = label.new(bar_index, _price, _name + (_isHigh ? ".H" : ".L"),
+         style = label.style_label_left,
+         color = color.new(color.black, 100),
+         textcolor = _col,
+         size = size.small)
+    array.push(pvLines, ln)
+    array.push(pvLabels, lb)
+    array.push(pvPrice, _price)
+    array.push(pvIsHigh, _isHigh)
+    array.push(pvActive, true)
+    if array.size(pvLines) > maxPV
+        line.delete(array.shift(pvLines))
+        label.delete(array.shift(pvLabels))
+        array.shift(pvPrice)
+        array.shift(pvIsHigh)
+        array.shift(pvActive)
+
+// ---- Opening gap storage ----
+var nwogBoxes = array.new<box>()
+var nwogMids  = array.new<line>()
+var nwogLbls  = array.new<label>()
+var ndogBoxes = array.new<box>()
+var ndogMids  = array.new<line>()
+var ndogLbls  = array.new<label>()
+
+f_addGap(_boxes, _mids, _lbls, _maxN, _col, _name) =>
+    top = math.max(open, close[1])
+    bot = math.min(open, close[1])
+    mid = math.avg(open, close[1])
+    bx = box.new(bar_index, top, bar_index + 1, bot,
+         border_color = color.new(_col, 60),
+         bgcolor = color.new(_col, 85),
+         extend = extend.right)
+    ml = showGapEQ ?
+         line.new(bar_index, mid, bar_index + 1, mid,
+             color = color.new(_col, 30),
+             style = line.style_dotted,
+             extend = extend.right) : na
+    lb = showGapLbl ?
+         label.new(bar_index, top, _name,
+             style = label.style_label_down,
+             color = color.new(_col, 100),
+             textcolor = _col,
+             size = size.tiny) : na
+    array.push(_boxes, bx)
+    array.push(_mids, ml)
+    array.push(_lbls, lb)
+    if array.size(_boxes) > _maxN
+        box.delete(array.shift(_boxes))
+        line.delete(array.shift(_mids))
+        label.delete(array.shift(_lbls))
+
+// ---- True open line (archives previous day's line, keeps `toDays` of history) ----
+f_trueOpen(_show, _name, _h, _m, _col) =>
+    var line cur = na
+    var label lb = na
+    var hist   = array.new<line>()
+    var histLb = array.new<label>()
+    if _show and inRange
+        if f_atTime(_h, _m)
+            if not na(cur)
+                array.push(hist, cur)
+                array.push(histLb, lb)
+                while array.size(hist) > toDays - 1
+                    line.delete(array.shift(hist))
+                    label.delete(array.shift(histLb))
+            cur := line.new(bar_index, open, bar_index + 1, open,
+                 color = _col, style = line.style_dashed, width = 1)
+            lb := label.new(bar_index + 1, open, _name,
+                 style = label.style_label_left,
+                 color = color.new(color.black, 100),
+                 textcolor = _col,
+                 size = size.small)
+        else if not na(cur)
+            line.set_x2(cur, bar_index + 1)
+            label.set_x(lb, bar_index + 1)
+
+// ================== Killzones + Pivots ==================
+[endAsia, hiAsia, loAsia] = f_kz(showAsia, nameAsia, sessAsia, colAsia)
+[endLndn, hiLndn, loLndn] = f_kz(showLndn, nameLndn, sessLndn, colLndn)
+[endPre,  hiPre,  loPre ] = f_kz(showPre,  namePre,  sessPre,  colPre)
+[endNyam, hiNyam, loNyam] = f_kz(showNyam, nameNyam, sessNyam, colNyam)
+[endNypm, hiNypm, loNypm] = f_kz(showNypm, nameNypm, sessNypm, colNypm)
+
+if showPV and inRange
+    if showAsia and endAsia
+        f_addPivot(nameAsia, hiAsia, true, colAsia)
+        f_addPivot(nameAsia, loAsia, false, colAsia)
+    if showLndn and endLndn
+        f_addPivot(nameLndn, hiLndn, true, colLndn)
+        f_addPivot(nameLndn, loLndn, false, colLndn)
+    if showPre and endPre
+        f_addPivot(namePre, hiPre, true, colPre)
+        f_addPivot(namePre, loPre, false, colPre)
+    if showNyam and endNyam
+        f_addPivot(nameNyam, hiNyam, true, colNyam)
+        f_addPivot(nameNyam, loNyam, false, colNyam)
+    if showNypm and endNypm
+        f_addPivot(nameNypm, hiNypm, true, colNypm)
+        f_addPivot(nameNypm, loNypm, false, colNypm)
+
+// Extend active pivots each bar; freeze once price trades through them
+if array.size(pvLines) > 0
+    for i = 0 to array.size(pvLines) - 1
+        if array.get(pvActive, i)
+            ln = array.get(pvLines, i)
+            lb = array.get(pvLabels, i)
+            p  = array.get(pvPrice, i)
+            line.set_x2(ln, bar_index)
+            label.set_x(lb, bar_index)
+            breached = array.get(pvIsHigh, i) ? high > p : low < p
+            if breached
+                array.set(pvActive, i, false)
+
+// ================== NWOG / NDOG ==================
+// New trading day on CME futures starts 18:00 NY. NWOG = Friday 17:00 close -> Sunday 18:00 open.
+newTradingDay = timeframe.isintraday and nz(ta.change(time("D")), 0) != 0
+hasGapData = newTradingDay and not na(close[1]) and open != close[1]
+
+if hasGapData and inRange
+    isWeekOpen = dayofweek(time, tz) == dayofweek.sunday
+    if isWeekOpen and showNWOG
+        f_addGap(nwogBoxes, nwogMids, nwogLbls, nwogCount, colNWOG, "NWOG")
+    if not isWeekOpen and showNDOG
+        f_addGap(ndogBoxes, ndogMids, ndogLbls, ndogCount, colNDOG, "NDOG")
+
+// ================== True Opens ==================
+f_trueOpen(showTDO, "TDO", hTDO, mTDO, colTDO)
+f_trueOpen(showTAO, "True Asia", hTAO, mTAO, colTAO)
+f_trueOpen(showTLO, "True London", hTLO, mTLO, colTLO)
+f_trueOpen(showTNO, "True NY", hTNO, mTNO, colTNO)
