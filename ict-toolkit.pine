@@ -92,8 +92,8 @@ f_atTime(_h, _m) =>
     t = timestamp(tz, year(time, tz), month(time, tz), dayofmonth(time, tz), _h, _m, 0)
     time >= t and (na(time[1]) ? false : time[1] < t)
 
-// Killzone box: tracks session hi/lo, draws box + name label.
-// Returns [sessionJustEnded, sessionHigh, sessionLow]
+// Killzone box: tracks session hi/lo (and the bars that made them), draws box + name label.
+// Returns [sessionJustEnded, sessionHigh, sessionLow, highBar, lowBar]
 f_kz(_show, _name, _sess, _col) =>
     sessT  = time(timeframe.period, _sess, tz)
     inSess = not na(sessT)
@@ -102,14 +102,22 @@ f_kz(_show, _name, _sess, _col) =>
     endBar   = not inSess and prevIn
     var float hi = na
     var float lo = na
+    var int hiBar = na
+    var int loBar = na
     var box bx = na
     var label lb = na
     if startBar
         hi := high
         lo := low
-    else if inSess
-        hi := math.max(hi, high)
-        lo := math.min(lo, low)
+        hiBar := bar_index
+        loBar := bar_index
+    if inSess and not startBar
+        if high >= hi
+            hi := high
+            hiBar := bar_index
+        if low <= lo
+            lo := low
+            loBar := bar_index
     drawOK = showKZ and _show and inRange
     if drawOK and startBar
         bx := box.new(bar_index, hi, bar_index, lo,
@@ -129,7 +137,7 @@ f_kz(_show, _name, _sess, _col) =>
         if not na(lb)
             label.set_y(lb, hi)
             label.set_x(lb, int(math.avg(box.get_left(bx), bar_index)))
-    [endBar, hi, lo]
+    [endBar, hi, lo, hiBar, loBar]
 
 // ---- Session pivot storage (shared) ----
 var pvLines  = array.new<line>()
@@ -138,8 +146,8 @@ var pvPrice  = array.new<float>()
 var pvIsHigh = array.new<bool>()
 var pvActive = array.new<bool>()
 
-f_addPivot(_name, _price, _isHigh, _col) =>
-    ln = line.new(bar_index - 1, _price, bar_index, _price, color = _col, width = 1)
+f_addPivot(_name, _price, _isHigh, _col, _fromBar) =>
+    ln = line.new(_fromBar, _price, bar_index, _price, color = _col, width = 1)
     lb = label.new(bar_index, _price, _name + (_isHigh ? ".H" : ".L"),
          style = label.style_label_left,
          color = color.new(color.black, 100),
@@ -220,28 +228,28 @@ f_trueOpen(_show, _name, _h, _m, _col) =>
         label.set_x(lb, bar_index + 1)
 
 // ================== Killzones + Pivots ==================
-[endAsia, hiAsia, loAsia] = f_kz(showAsia, nameAsia, sessAsia, colAsia)
-[endLndn, hiLndn, loLndn] = f_kz(showLndn, nameLndn, sessLndn, colLndn)
-[endPre,  hiPre,  loPre ] = f_kz(showPre,  namePre,  sessPre,  colPre)
-[endNyam, hiNyam, loNyam] = f_kz(showNyam, nameNyam, sessNyam, colNyam)
-[endNypm, hiNypm, loNypm] = f_kz(showNypm, nameNypm, sessNypm, colNypm)
+[endAsia, hiAsia, loAsia, hBarAsia, lBarAsia] = f_kz(showAsia, nameAsia, sessAsia, colAsia)
+[endLndn, hiLndn, loLndn, hBarLndn, lBarLndn] = f_kz(showLndn, nameLndn, sessLndn, colLndn)
+[endPre,  hiPre,  loPre,  hBarPre,  lBarPre ] = f_kz(showPre,  namePre,  sessPre,  colPre)
+[endNyam, hiNyam, loNyam, hBarNyam, lBarNyam] = f_kz(showNyam, nameNyam, sessNyam, colNyam)
+[endNypm, hiNypm, loNypm, hBarNypm, lBarNypm] = f_kz(showNypm, nameNypm, sessNypm, colNypm)
 
 if showPV and inRange
     if showAsia and endAsia
-        f_addPivot(nameAsia, hiAsia, true, colAsia)
-        f_addPivot(nameAsia, loAsia, false, colAsia)
+        f_addPivot(nameAsia, hiAsia, true, colAsia, hBarAsia)
+        f_addPivot(nameAsia, loAsia, false, colAsia, lBarAsia)
     if showLndn and endLndn
-        f_addPivot(nameLndn, hiLndn, true, colLndn)
-        f_addPivot(nameLndn, loLndn, false, colLndn)
+        f_addPivot(nameLndn, hiLndn, true, colLndn, hBarLndn)
+        f_addPivot(nameLndn, loLndn, false, colLndn, lBarLndn)
     if showPre and endPre
-        f_addPivot(namePre, hiPre, true, colPre)
-        f_addPivot(namePre, loPre, false, colPre)
+        f_addPivot(namePre, hiPre, true, colPre, hBarPre)
+        f_addPivot(namePre, loPre, false, colPre, lBarPre)
     if showNyam and endNyam
-        f_addPivot(nameNyam, hiNyam, true, colNyam)
-        f_addPivot(nameNyam, loNyam, false, colNyam)
+        f_addPivot(nameNyam, hiNyam, true, colNyam, hBarNyam)
+        f_addPivot(nameNyam, loNyam, false, colNyam, lBarNyam)
     if showNypm and endNypm
-        f_addPivot(nameNypm, hiNypm, true, colNypm)
-        f_addPivot(nameNypm, loNypm, false, colNypm)
+        f_addPivot(nameNypm, hiNypm, true, colNypm, hBarNypm)
+        f_addPivot(nameNypm, loNypm, false, colNypm, lBarNypm)
 
 // Extend active pivots each bar; freeze once price trades through them
 if array.size(pvLines) > 0
