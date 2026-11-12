@@ -15,6 +15,7 @@ tf_limit            = input.timeframe("30", "Timeframe Limit", tooltip = "Drawin
 tz_opt              = input.string('New York', "Timezone", options = ['New York','GMT-12','GMT-11','GMT-10','GMT-9','GMT-8','GMT-7','GMT-6','GMT-5','GMT-4','GMT-3','GMT-2','GMT-1','GMT+0','GMT+1','GMT+2','GMT+3','GMT+4','GMT+5','GMT+6','GMT+7','GMT+8','GMT+9','GMT+10','GMT+11','GMT+12','GMT+13','GMT+14'], tooltip = "New York adjusts for Daylight Saving Time automatically. GMT options do not.", group = g_SETTINGS)
 use_cutoff          = input.bool(true, "Cutoff Time", inline = "CO", tooltip = "When enabled, all highs and lows will stop extending after this time", group = g_SETTINGS)
 cutoff              = input.session("1200-1201", "", inline = "CO", group = g_SETTINGS)
+session_limit       = input.int(3, "Session Limit", minval = 1, maxval = 50, tooltip = "How many recent sessions to keep on the chart. Older killzones, pivots, true opens and timestamps are removed automatically.", group = g_SETTINGS)
 
 gmt_tz = tz_opt == 'New York' ? 'America/New_York' : tz_opt
 
@@ -196,6 +197,37 @@ var box na_box = na
 var box np_box = na
 
 transparent = #ffffff00
+
+// Session Limit storage: oldest drawings are deleted once the limit is exceeded
+var as_lines  = array.new<line>()
+var as_labels = array.new<label>()
+var as_boxes  = array.new<box>()
+var lo_lines  = array.new<line>()
+var lo_labels = array.new<label>()
+var lo_boxes  = array.new<box>()
+var pr_lines  = array.new<line>()
+var pr_labels = array.new<label>()
+var pr_boxes  = array.new<box>()
+var na_lines  = array.new<line>()
+var na_labels = array.new<label>()
+var na_boxes  = array.new<box>()
+var np_lines  = array.new<line>()
+var np_labels = array.new<label>()
+var np_boxes  = array.new<box>()
+
+var h1_lines  = array.new<line>()
+var h1_labels = array.new<label>()
+var h2_lines  = array.new<line>()
+var h2_labels = array.new<label>()
+var h3_lines  = array.new<line>()
+var h3_labels = array.new<label>()
+var h4_lines  = array.new<line>()
+var h4_labels = array.new<label>()
+
+var v1_lines  = array.new<line>()
+var v2_lines  = array.new<line>()
+var v3_lines  = array.new<line>()
+var v4_lines  = array.new<line>()
 // ---------------------------------------- Variables & Constants --------------------------------------------------
 
 
@@ -219,6 +251,21 @@ get_line_type(_style) =>
 
 get_box_color(_color, _transparency) =>
     result = color.new(_color, _transparency)
+
+keep_line(_arr, _ln, _n) =>
+    array.push(_arr, _ln)
+    if array.size(_arr) > _n
+        line.delete(array.shift(_arr))
+
+keep_label(_arr, _lb, _n) =>
+    array.push(_arr, _lb)
+    if array.size(_arr) > _n
+        label.delete(array.shift(_arr))
+
+keep_box(_arr, _bx, _n) =>
+    array.push(_arr, _bx)
+    if array.size(_arr) > _n
+        box.delete(array.shift(_arr))
 
 adjust(_hline, _lline, _hlabel, _llabel, _ulabel, _box) =>
     _hline.set_x2(bar_index)
@@ -289,13 +336,18 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
         if t_as and not t_as[1]
             as_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = as_color, width = s_width)
             as_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = as_color, width = s_width)
+            keep_line(as_lines, as_hi_line, session_limit * 2)
+            keep_line(as_lines, as_lo_line, session_limit * 2)
 
             if show_kz
                 as_box := box.new(bar_index, high, bar_index, low, border_color = as_box_color, bgcolor = as_box_color, text = show_kz_text ? asia_text : na, text_color = as_text_color)
+                keep_box(as_boxes, as_box, session_limit)
 
             if as_label
                 as_hi_label := label.new(bar_index, high, ash_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
                 as_lo_label := label.new(bar_index, low, asl_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                keep_label(as_labels, as_hi_label, session_limit * 2)
+                keep_label(as_labels, as_lo_label, session_limit * 2)
         else if t_as
             adjust(as_hi_line, as_lo_line, as_hi_label, as_lo_label, as_label, as_box)
         else if not t_as
@@ -310,13 +362,18 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
         if t_lo and not t_lo[1]
             lo_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = lo_color, width = s_width)
             lo_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = lo_color, width = s_width)
+            keep_line(lo_lines, lo_hi_line, session_limit * 2)
+            keep_line(lo_lines, lo_lo_line, session_limit * 2)
 
             if show_kz
                 lo_box := box.new(bar_index, high, bar_index, low, border_color = lo_box_color, bgcolor = lo_box_color, text = show_kz_text ? london_text : na, text_color = lo_text_color)
+                keep_box(lo_boxes, lo_box, session_limit)
 
             if lo_label
                 lo_hi_label := label.new(bar_index, high, loh_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
                 lo_lo_label := label.new(bar_index, low, lol_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                keep_label(lo_labels, lo_hi_label, session_limit * 2)
+                keep_label(lo_labels, lo_lo_label, session_limit * 2)
         else if t_lo
             adjust(lo_hi_line, lo_lo_line, lo_hi_label, lo_lo_label, lo_label, lo_box)
         else if not t_lo
@@ -331,13 +388,18 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
         if t_pr and not t_pr[1]
             pr_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = pr_color, width = s_width)
             pr_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = pr_color, width = s_width)
+            keep_line(pr_lines, pr_hi_line, session_limit * 2)
+            keep_line(pr_lines, pr_lo_line, session_limit * 2)
 
             if show_kz
                 pr_box := box.new(bar_index, high, bar_index, low, border_color = pr_box_color, bgcolor = pr_box_color, text = show_kz_text ? pre_text : na, text_color = pr_text_color)
+                keep_box(pr_boxes, pr_box, session_limit)
 
             if pr_label
                 pr_hi_label := label.new(bar_index, high, prh_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
                 pr_lo_label := label.new(bar_index, low, prl_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                keep_label(pr_labels, pr_hi_label, session_limit * 2)
+                keep_label(pr_labels, pr_lo_label, session_limit * 2)
         else if t_pr
             adjust(pr_hi_line, pr_lo_line, pr_hi_label, pr_lo_label, pr_label, pr_box)
         else if not t_pr
@@ -352,13 +414,18 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
         if t_na and not t_na[1]
             na_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = na_color, width = s_width)
             na_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = na_color, width = s_width)
+            keep_line(na_lines, na_hi_line, session_limit * 2)
+            keep_line(na_lines, na_lo_line, session_limit * 2)
 
             if show_kz
                 na_box := box.new(bar_index, high, bar_index, low, border_color = na_box_color, bgcolor = na_box_color, text = show_kz_text ? nyam_text : na, text_color = na_text_color)
+                keep_box(na_boxes, na_box, session_limit)
 
             if na_label
                 na_hi_label := label.new(bar_index, high, nah_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
                 na_lo_label := label.new(bar_index, low, nal_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                keep_label(na_labels, na_hi_label, session_limit * 2)
+                keep_label(na_labels, na_lo_label, session_limit * 2)
         else if t_na
             adjust(na_hi_line, na_lo_line, na_hi_label, na_lo_label, na_label, na_box)
         else if not t_na
@@ -373,13 +440,18 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
         if t_np and not t_np[1]
             np_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = np_color, width = s_width)
             np_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = np_color, width = s_width)
+            keep_line(np_lines, np_hi_line, session_limit * 2)
+            keep_line(np_lines, np_lo_line, session_limit * 2)
 
             if show_kz
                 np_box := box.new(bar_index, high, bar_index, low, border_color = np_box_color, bgcolor = np_box_color, text = show_kz_text ? nypm_text : na, text_color = np_text_color)
+                keep_box(np_boxes, np_box, session_limit)
 
             if np_label
                 np_hi_label := label.new(bar_index, high, nph_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
                 np_lo_label := label.new(bar_index, low, npl_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                keep_label(np_labels, np_hi_label, session_limit * 2)
+                keep_label(np_labels, np_lo_label, session_limit * 2)
         else if t_np
             adjust(np_hi_line, np_lo_line, np_hi_label, np_lo_label, np_label, np_box)
         else if not t_np
@@ -393,21 +465,27 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
     if use_v1
         if t_v1 and not t_v1[1]
             v1_line := line.new(bar_index, high, bar_index, low, style = v_style, width = v_width, extend = extend.both, color = v1_color)
+            keep_line(v1_lines, v1_line, session_limit)
     if use_v2
         if t_v2 and not t_v2[1]
             v2_line := line.new(bar_index, high, bar_index, low, style = v_style, width = v_width, extend = extend.both, color = v2_color)
+            keep_line(v2_lines, v2_line, session_limit)
     if use_v3
         if t_v3 and not t_v3[1]
             v3_line := line.new(bar_index, high, bar_index, low, style = v_style, width = v_width, extend = extend.both, color = v3_color)
+            keep_line(v3_lines, v3_line, session_limit)
     if use_v4
         if t_v4 and not t_v4[1]
             v4_line := line.new(bar_index, high, bar_index, low, style = v_style, width = v_width, extend = extend.both, color = v4_color)
+            keep_line(v4_lines, v4_line, session_limit)
 
     // Horizontal Lines (True Opens)
     if use_h1
         if t_h1 and not t_h1[1]
             h1_line := line.new(bar_index, open, bar_index, open, style = h_style, width = h_width, color = h1_color)
             h1_label := label.new(bar_index, open, h1_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_size)
+            keep_line(h1_lines, h1_line, session_limit)
+            keep_label(h1_labels, h1_label, session_limit)
         else if not t_h1
             if check_open(h1_line, h1_label)
                 h1_line := na
@@ -419,6 +497,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
         if t_h2 and not t_h2[1]
             h2_line := line.new(bar_index, open, bar_index, open, style = h_style, width = h_width, color = h2_color)
             h2_label := label.new(bar_index, open, h2_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_size)
+            keep_line(h2_lines, h2_line, session_limit)
+            keep_label(h2_labels, h2_label, session_limit)
         else if not t_h2
             if check_open(h2_line, h2_label)
                 h2_line := na
@@ -430,6 +510,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
         if t_h3 and not t_h3[1]
             h3_line := line.new(bar_index, open, bar_index, open, style = h_style, width = h_width, color = h3_color)
             h3_label := label.new(bar_index, open, h3_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_size)
+            keep_line(h3_lines, h3_line, session_limit)
+            keep_label(h3_labels, h3_label, session_limit)
         else if not t_h3
             if check_open(h3_line, h3_label)
                 h3_line := na
@@ -441,6 +523,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
         if t_h4 and not t_h4[1]
             h4_line := line.new(bar_index, open, bar_index, open, style = h_style, width = h_width, color = h4_color)
             h4_label := label.new(bar_index, open, h4_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_size)
+            keep_line(h4_lines, h4_line, session_limit)
+            keep_label(h4_labels, h4_label, session_limit)
         else if not t_h4
             if check_open(h4_line, h4_label)
                 h4_line := na
