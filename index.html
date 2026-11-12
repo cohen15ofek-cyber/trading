@@ -37,7 +37,7 @@
       </div>
       <label>כמה מילים על הביאס <textarea id="bias-text" rows="2" placeholder="למה אני חושב ככה היום?"></textarea></label>
     </div>
-    <div class="card">
+    <div class="card" id="sc-card">
       <h2 id="sc-title">תרחיש חדש</h2>
       <div class="seg" id="sc-type">
         <button type="button" data-v="long" aria-pressed="true">לונג</button>
@@ -46,6 +46,7 @@
       <label>התרחיש <textarea id="sc-text" rows="3" placeholder="מאיפה אני לוקח את העסקה, ומה צריך לקרות לפני?"></textarea></label>
       <div class="row">
         <label class="btn">צירוף תמונה <input type="file" id="sc-img" accept="image/*" hidden></label>
+        <span class="muted hint">או לגרור תמונה לכאן / להדביק (Ctrl+V)</span>
         <div id="sc-preview" class="thumbs"></div>
       </div>
       <div class="row end">
@@ -113,7 +114,7 @@
     <div class="card table-wrap">
       <table id="trades-table">
         <thead><tr>
-          <th>תאריך</th><th>מדד</th><th>כיוון</th><th>רווח/הפסד</th><th>R</th><th>ציון</th><th>חוקים</th><th></th>
+          <th>תאריך</th><th>מדד</th><th>כיוון</th><th>רווח/הפסד</th><th>R</th><th>ציון</th><th>חוקים</th><th>תמונה</th><th></th>
         </tr></thead>
         <tbody></tbody>
       </table>
@@ -199,7 +200,10 @@
       <textarea name="notes" rows="3" placeholder="כמה מילים: מה הרגשתי, מה עבר לי בראש"></textarea>
     </fieldset>
     <fieldset><legend>תמונה של העסקה</legend>
-      <label class="btn">צירוף תמונה <input type="file" id="in-img" accept="image/*" multiple hidden></label>
+      <div class="row">
+        <label class="btn">צירוף תמונה <input type="file" id="in-img" accept="image/*" multiple hidden></label>
+        <span class="muted hint">או לגרור תמונה לכאן / להדביק (Ctrl+V)</span>
+      </div>
       <div id="thumbs" class="thumbs"></div>
     </fieldset>
     <div class="row end">

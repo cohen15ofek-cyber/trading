@@ -58,7 +58,7 @@ details.card summary { cursor: pointer; color: var(--text2); font-weight: 650; }
 .bars .sub { color: var(--muted); font-size: 12px; }
 .table-wrap { overflow-x: auto; padding: 0; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
-th, td { padding: 9px 10px; text-align: start; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th, td { padding: 9px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
 th { color: var(--muted); font-weight: 600; background: var(--tint); }
 tr.detail td { white-space: normal; background: var(--tint); }
 tr.detail p { margin: 0 0 6px; }
@@ -133,3 +133,7 @@ ol.rules .yn button[aria-pressed="true"].x { background: var(--neg); border-colo
   ol.rules li { flex-wrap: wrap; }
   ol.rules .yn { margin-inline-start: auto; }
 }
+td.pic img { height: 44px; max-width: 90px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: zoom-in; vertical-align: middle; }
+.thumbs img { height: 110px; }
+.drop { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--tint); }
+.hint { font-size: 13px; }

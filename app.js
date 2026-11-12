@@ -418,9 +418,12 @@ function renderTable(list) {
     body.append(el('tr', {},
       td(t.date + (t.time ? ' ' + t.time : ''), 'num'), td(t.symbol, 'ltr'), td(DIR[t.dir] || ''),
       td(money(p), 'num ' + cls(p)), td(r == null ? '—' : num(r) + 'R', 'num'), td(String(scoreOf(t)), 'num'),
-      td(rulesLabel(t), t.kept === false ? 'warn' : t.kept === true ? 'ok' : ''), actions));
+      td(rulesLabel(t), t.kept === false ? 'warn' : t.kept === true ? 'ok' : ''),
+      el('td', { className: 'pic' }, ...(t.images && t.images.length ? [el('img', { src: t.images[0], alt: 'תמונת העסקה', title: 'לחץ להגדלה',
+        onclick: () => view(t.images[0]) }), ...(t.images.length > 1 ? [el('span', { className: 'muted', textContent: ' +' + (t.images.length - 1) })] : [])] : ['—'])),
+      actions));
     if (openDetail === t.id) {
-      const cell = el('td', { colSpan: 8 });
+      const cell = el('td', { colSpan: 9 });
       const line = (k, v) => v ? cell.append(el('p', {}, el('b', { textContent: k + ': ' }), v)) : null;
       line('חוקים שנשברו', (t.broken || []).map(b => `${b}. ${RULES()[b - 1]}`).join(' · '));
       line('נקודות שירדו בציון', SCORE.filter(([k]) => !(t.score && t.score[k])).map(([, l, pt]) => `${l} (−${pt})`).join(' · '));
@@ -502,6 +505,22 @@ function compress(file) {
   });
 }
 
+// Lets images be dragged onto an area, or pasted into it with Ctrl+V.
+function acceptImages(target, onFiles) {
+  const pics = list => [...list].filter(f => f.type.startsWith('image/'));
+  let depth = 0;
+  target.addEventListener('dragenter', e => { e.preventDefault(); depth++; target.classList.add('drop'); });
+  target.addEventListener('dragover', e => e.preventDefault());
+  target.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; target.classList.remove('drop'); } });
+  target.addEventListener('drop', e => {
+    e.preventDefault(); depth = 0; target.classList.remove('drop');
+    const fs = pics(e.dataTransfer.files); if (fs.length) onFiles(fs);
+  });
+  target.addEventListener('paste', e => {
+    const fs = pics(e.clipboardData.files); if (fs.length) { e.preventDefault(); onFiles(fs); }
+  });
+}
+
 /* ---------- backup ---------- */
 function download(name, text, type) {
   const a = el('a', { href: URL.createObjectURL(new Blob([text], { type })), download: name });
@@ -552,10 +571,9 @@ async function init() {
   $$('#bias button').forEach(b => b.onclick = () => saveDay(curDate(), { bias: dayOf(curDate()).bias === b.dataset.v ? '' : b.dataset.v }));
   $('#bias-text').addEventListener('change', e => saveDay(curDate(), { biasText: e.target.value.trim() }));
   $$('#sc-type button').forEach(b => b.onclick = () => setSeg('#sc-type', b.dataset.v));
-  $('#sc-img').addEventListener('change', async e => {
-    if (e.target.files[0]) scImage = await compress(e.target.files[0]);
-    e.target.value = ''; renderScPreview();
-  });
+  const setScImage = async files => { if (files[0]) scImage = await compress(files[0]); renderScPreview(); };
+  $('#sc-img').addEventListener('change', async e => { await setScImage(e.target.files); e.target.value = ''; });
+  acceptImages($('#sc-card'), setScImage);
   $('#sc-cancel').onclick = resetScenarioForm;
   $('#sc-add').onclick = async () => {
     const text = $('#sc-text').value.trim();
@@ -593,10 +611,11 @@ async function init() {
     showView('journal');
     await refresh();
   });
-  $('#in-img').addEventListener('change', async e => {
-    for (const f of e.target.files) images.push(await compress(f));
-    e.target.value = ''; renderThumbs();
-  });
+  const addImages = async files => { for (const f of files) images.push(await compress(f)); renderThumbs(); };
+  $('#in-img').addEventListener('change', async e => { await addImages(e.target.files); e.target.value = ''; });
+  acceptImages($('#form'), addImages);
+  // A file dropped outside a drop area must not replace the page.
+  ['dragover', 'drop'].forEach(ev => addEventListener(ev, e => e.preventDefault()));
   $('#viewer').addEventListener('click', () => $('#viewer').close());
 
   // backup
