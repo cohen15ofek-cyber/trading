@@ -1,5 +1,5 @@
 //@version=5
-indicator("ICT Toolkit — Killzones, Pivots, NWOG/NDOG, True Opens",
+indicator("ICT Toolkit - Killzones, Pivots, NWOG/NDOG, True Opens",
      shorttitle = "ICT Toolkit",
      overlay = true,
      max_boxes_count = 500,
@@ -110,25 +110,25 @@ f_kz(_show, _name, _sess, _col) =>
     else if inSess
         hi := math.max(hi, high)
         lo := math.min(lo, low)
-    if showKZ and _show and inRange
-        if startBar
-            bx := box.new(bar_index, hi, bar_index, lo,
-                 border_color = color.new(_col, 40),
-                 bgcolor = color.new(_col, kzTransp),
-                 border_width = 1)
-            if showKZLbl
-                lb := label.new(bar_index, hi, _name,
-                     style = label.style_label_down,
-                     color = color.new(_col, 100),
-                     textcolor = _col,
-                     size = size.small)
-        else if inSess and not na(bx)
-            box.set_top(bx, hi)
-            box.set_bottom(bx, lo)
-            box.set_right(bx, bar_index)
-            if not na(lb)
-                label.set_y(lb, hi)
-                label.set_x(lb, int(math.avg(box.get_left(bx), bar_index)))
+    drawOK = showKZ and _show and inRange
+    if drawOK and startBar
+        bx := box.new(bar_index, hi, bar_index, lo,
+             border_color = color.new(_col, 40),
+             bgcolor = color.new(_col, kzTransp),
+             border_width = 1)
+        if showKZLbl
+            lb := label.new(bar_index, hi, _name,
+                 style = label.style_label_down,
+                 color = color.new(_col, 100),
+                 textcolor = _col,
+                 size = size.small)
+    if drawOK and not startBar and inSess and not na(bx)
+        box.set_top(bx, hi)
+        box.set_bottom(bx, lo)
+        box.set_right(bx, bar_index)
+        if not na(lb)
+            label.set_y(lb, hi)
+            label.set_x(lb, int(math.avg(box.get_left(bx), bar_index)))
     [endBar, hi, lo]
 
 // ---- Session pivot storage (shared) ----
@@ -173,17 +173,19 @@ f_addGap(_boxes, _mids, _lbls, _maxN, _col, _name) =>
          border_color = color.new(_col, 60),
          bgcolor = color.new(_col, 85),
          extend = extend.right)
-    ml = showGapEQ ?
-         line.new(bar_index, mid, bar_index + 1, mid,
+    ml = line(na)
+    if showGapEQ
+        ml := line.new(bar_index, mid, bar_index + 1, mid,
              color = color.new(_col, 30),
              style = line.style_dotted,
-             extend = extend.right) : na
-    lb = showGapLbl ?
-         label.new(bar_index, top, _name,
+             extend = extend.right)
+    lb = label(na)
+    if showGapLbl
+        lb := label.new(bar_index, top, _name,
              style = label.style_label_down,
              color = color.new(_col, 100),
              textcolor = _col,
-             size = size.tiny) : na
+             size = size.tiny)
     array.push(_boxes, bx)
     array.push(_mids, ml)
     array.push(_lbls, lb)
@@ -198,24 +200,24 @@ f_trueOpen(_show, _name, _h, _m, _col) =>
     var label lb = na
     var hist   = array.new<line>()
     var histLb = array.new<label>()
-    if _show and inRange
-        if f_atTime(_h, _m)
-            if not na(cur)
-                array.push(hist, cur)
-                array.push(histLb, lb)
-                while array.size(hist) > toDays - 1
-                    line.delete(array.shift(hist))
-                    label.delete(array.shift(histLb))
-            cur := line.new(bar_index, open, bar_index + 1, open,
-                 color = _col, style = line.style_dashed, width = 1)
-            lb := label.new(bar_index + 1, open, _name,
-                 style = label.style_label_left,
-                 color = color.new(color.black, 100),
-                 textcolor = _col,
-                 size = size.small)
-        else if not na(cur)
-            line.set_x2(cur, bar_index + 1)
-            label.set_x(lb, bar_index + 1)
+    trig = _show and inRange and f_atTime(_h, _m)
+    if trig
+        if not na(cur)
+            array.push(hist, cur)
+            array.push(histLb, lb)
+            while array.size(hist) > toDays - 1
+                line.delete(array.shift(hist))
+                label.delete(array.shift(histLb))
+        cur := line.new(bar_index, open, bar_index + 1, open,
+             color = _col, style = line.style_dashed, width = 1)
+        lb := label.new(bar_index + 1, open, _name,
+             style = label.style_label_left,
+             color = color.new(color.black, 100),
+             textcolor = _col,
+             size = size.small)
+    if not trig and not na(cur)
+        line.set_x2(cur, bar_index + 1)
+        label.set_x(lb, bar_index + 1)
 
 // ================== Killzones + Pivots ==================
 [endAsia, hiAsia, loAsia] = f_kz(showAsia, nameAsia, sessAsia, colAsia)
