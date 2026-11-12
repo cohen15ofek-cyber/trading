@@ -123,6 +123,21 @@ v4                  = input.session("1800-1801", "", inline = "V4", group = g_VE
 v4_color            = input.color(color.black, "", inline = "V4", group = g_VERTICAL)
 
 
+var g_HTF           = "True Week / Month Open"
+htf_mode            = input.string('Quarterly Theory', "Definition", options = ['Quarterly Theory', 'Regular'], tooltip = "Quarterly Theory: TWO = Monday 18:00 NY (open of Q2 of the week), TMO = Monday 18:00 NY of the 2nd week of the month (2nd Monday). Regular: first bar of the new week / month (Sunday 18:00 open on CME).", group = g_HTF)
+htf_style           = input.string(defval = 'Dashed', title = "Style", options = ['Solid', 'Dotted', 'Dashed'], inline = "W0", group = g_HTF)
+htf_width           = input.int(1, "", inline = "W0", group = g_HTF)
+htf_hist            = input.int(1, "History", minval = 1, maxval = 10, tooltip = "How many past weekly / monthly opens to keep on the chart", group = g_HTF)
+
+use_two             = input.bool(true, "", inline = "TWO", group = g_HTF)
+two_text            = input.string("TWO", "", inline = "TWO", group = g_HTF)
+two_color           = input.color(#2962ff, "", inline = "TWO", group = g_HTF)
+
+use_tmo             = input.bool(true, "", inline = "TMO", group = g_HTF)
+tmo_text            = input.string("TMO", "", inline = "TMO", group = g_HTF)
+tmo_color           = input.color(#ff9800, "", inline = "TMO", group = g_HTF)
+
+
 var g_GAP           = "Opening Gaps (NWOG / NDOG)"
 show_nwog           = input.bool(true, "Show NWOG", inline = "G1", group = g_GAP)
 nwog_count          = input.int(5, "Amount", minval = 1, maxval = 10, inline = "G1", group = g_GAP)
@@ -532,6 +547,43 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
             else
                 h4_label.set_x(bar_index)
 // ---------------------------------------- Core Logic --------------------------------------------------
+
+
+// ---------------------------------------- True Week / Month Open --------------------------------------------------
+var two_lines  = array.new<line>()
+var two_labels = array.new<label>()
+var tmo_lines  = array.new<line>()
+var tmo_labels = array.new<label>()
+
+f_htf_open(_trig, _show, _text, _col, _lines, _labels) =>
+    var line cur = na
+    var label lb = na
+    if _show and _trig
+        cur := line.new(bar_index, open, bar_index, open, style = get_line_type(htf_style), width = htf_width, color = _col)
+        lb := label.new(bar_index, open, _text, style = label.style_label_left, color = transparent, textcolor = _col, size = lb_size)
+        keep_line(_lines, cur, htf_hist)
+        keep_label(_labels, lb, htf_hist)
+    if _show and not _trig and not na(cur)
+        cur.set_x2(bar_index)
+        lb.set_x(bar_index)
+
+ny_dow  = dayofweek(time, gmt_tz)
+ny_hour = hour(time, gmt_tz)
+ny_dom  = dayofmonth(time, gmt_tz)
+
+qt_week_c  = ny_dow == dayofweek.monday and ny_hour >= 18
+qt_month_c = qt_week_c and ny_dom >= 8 and ny_dom <= 14
+
+new_week  = nz(ta.change(time("W")), 0) != 0
+new_month = nz(ta.change(time("M")), 0) != 0
+
+two_trig = htf_mode == 'Quarterly Theory' ? (qt_week_c and not qt_week_c[1]) : new_week
+tmo_trig = htf_mode == 'Quarterly Theory' ? (qt_month_c and not qt_month_c[1]) : new_month
+
+if timeframe.isintraday
+    f_htf_open(two_trig, use_two, two_text, two_color, two_lines, two_labels)
+    f_htf_open(tmo_trig, use_tmo, tmo_text, tmo_color, tmo_lines, tmo_labels)
+// ---------------------------------------- True Week / Month Open --------------------------------------------------
 
 
 // ---------------------------------------- NWOG / NDOG --------------------------------------------------
