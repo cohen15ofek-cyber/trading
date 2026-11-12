@@ -76,6 +76,14 @@ const money = v => (v < 0 ? '−' : v > 0 ? '+' : '') + '$' + Math.abs(v).toLoca
 const num = (v, d = 2) => v == null || !isFinite(v) ? '—' : (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
 const cls = v => v > 0 ? 'pos-mark' : v < 0 ? 'neg-mark' : '';
 const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+// Reads "103", "-1", "1-", "−1" or "1,250.5". Returns null when empty or not a number.
+const parseNum = s => {
+  const t = String(s ?? '').replace(/[\s,$\u200e\u200f]/g, '');
+  if (!t) return null;
+  const neg = /[-\u2212]/.test(t), v = Number(t.replace(/[-\u2212]/g, ''));
+  return isFinite(v) && t.replace(/[-\u2212]/g, '') !== '' ? (neg ? -v : v) : NaN;
+};
+const resultOf = t => { const p = pnlOf(t); return p > 0 ? ['win', 'ניצחון'] : p < 0 ? ['loss', 'הפסד'] : ['be', 'BE']; };
 const byTime = (a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''));
 
 /* ---------- state ---------- */
@@ -417,13 +425,14 @@ function renderTable(list) {
         if (confirm('למחוק את העסקה?')) { await store('trades', 'readwrite', s => s.delete(t.id)); await refresh(); } } }));
     body.append(el('tr', {},
       td(t.date + (t.time ? ' ' + t.time : ''), 'num'), td(t.symbol, 'ltr'), td(DIR[t.dir] || ''),
+      el('td', {}, el('span', { className: 'res ' + resultOf(t)[0], textContent: resultOf(t)[1] })),
       td(money(p), 'num ' + cls(p)), td(r == null ? '—' : num(r) + 'R', 'num'), td(String(scoreOf(t)), 'num'),
       td(rulesLabel(t), t.kept === false ? 'warn' : t.kept === true ? 'ok' : ''),
       el('td', { className: 'pic' }, ...(t.images && t.images.length ? [el('img', { src: t.images[0], alt: 'תמונת העסקה', title: 'לחץ להגדלה',
         onclick: () => view(t.images[0]) }), ...(t.images.length > 1 ? [el('span', { className: 'muted', textContent: ' +' + (t.images.length - 1) })] : [])] : ['—'])),
       actions));
     if (openDetail === t.id) {
-      const cell = el('td', { colSpan: 9 });
+      const cell = el('td', { colSpan: 10 });
       const line = (k, v) => v ? cell.append(el('p', {}, el('b', { textContent: k + ': ' }), v)) : null;
       line('חוקים שנשברו', (t.broken || []).map(b => `${b}. ${RULES()[b - 1]}`).join(' · '));
       line('נקודות שירדו בציון', SCORE.filter(([k]) => !(t.score && t.score[k])).map(([, l, pt]) => `${l} (−${pt})`).join(' · '));
@@ -468,8 +477,8 @@ function readForm() {
   return {
     id: editing ? editing.id : uid(),
     date: e.date.value, time: e.time.value, symbol: e.symbol.value, dir: e.dir.value,
-    pnl: sign * Math.abs(Number(e.amount.value) || 0),
-    r: e.r.value === '' ? null : sign * Math.abs(Number(e.r.value)),
+    pnl: sign * Math.abs(parseNum(e.amount.value) || 0),
+    r: parseNum(e.r.value) == null || isNaN(parseNum(e.r.value)) ? null : sign * Math.abs(parseNum(e.r.value)),
     score: Object.fromEntries($$('#score input').map(i => [i.value, i.checked])),
     kept, broken: kept === false ? $$('#broken input:checked').map(i => Number(i.value)) : [],
     notes: e.notes.value.trim(), images,
@@ -480,7 +489,9 @@ function updateForm() {
   $('#score-total').textContent = scoreOf(readForm()) + ' / 100';
   $('#broken-box').hidden = e.kept.value !== 'no';
   // Typing a minus sign (e.g. -1R or -50) marks the trade as a loss on its own.
-  if (Number(e.amount.value) < 0 || Number(e.r.value) < 0) e.res.value = 'loss';
+  if (parseNum(e.amount.value) < 0 || parseNum(e.r.value) < 0) e.res.value = 'loss';
+  e.amount.setCustomValidity(isNaN(parseNum(e.amount.value)) ? 'צריך מספר, למשל 103 או ‎-103' : '');
+  e.r.setCustomValidity(isNaN(parseNum(e.r.value)) ? 'צריך מספר, למשל 2 או ‎-1' : '');
   const be = e.res.value === 'be';
   e.amount.required = !be;
   if (be) { e.amount.value = 0; e.r.value = 0; }

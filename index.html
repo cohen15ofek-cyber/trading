@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>יומן מסחר – משמעת ועקביות</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <header class="top">
@@ -114,7 +114,7 @@
     <div class="card table-wrap">
       <table id="trades-table">
         <thead><tr>
-          <th>תאריך</th><th>מדד</th><th>כיוון</th><th>רווח/הפסד</th><th>R</th><th>ציון</th><th>חוקים</th><th>תמונה</th><th></th>
+          <th>תאריך</th><th>מדד</th><th>כיוון</th><th>תוצאה</th><th>רווח/הפסד</th><th>R</th><th>ציון</th><th>חוקים</th><th>תמונה</th><th></th>
         </tr></thead>
         <tbody></tbody>
       </table>
@@ -178,8 +178,8 @@
         <label>תוצאה
           <select name="res"><option value="win">רווח</option><option value="loss">הפסד</option><option value="be">ברייק־איבן</option></select>
         </label>
-        <label>סכום ($) <input type="number" name="amount" step="0.01" inputmode="decimal" required></label>
-        <label>כמה R <input type="number" name="r" step="0.01" inputmode="decimal"></label>
+        <label>סכום ($) <input type="text" name="amount" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="103 או ‎-103" required></label>
+        <label>כמה R <input type="text" name="r" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="2 או ‎-1"></label>
       </div>
     </fieldset>
     <fieldset><legend>ציון 100/100</legend>
@@ -215,6 +215,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
