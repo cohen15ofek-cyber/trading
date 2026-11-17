@@ -477,7 +477,7 @@ function renderTable(list) {
   const body = $('#trades-table tbody');
   body.replaceChildren();
   $('#empty').hidden = list.length > 0;
-  [...list].reverse().forEach(t => {
+  list.forEach(t => {
     const p = pnlOf(t), r = rOf(t);
     const td = (text, c = '') => el('td', { className: c, textContent: text });
     const actions = el('td', {},
