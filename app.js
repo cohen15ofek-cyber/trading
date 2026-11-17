@@ -9,21 +9,39 @@ const SCORE = [
   ['calm', 'כניסה רגועה, לא מתוך FOMO או נקמה', 10],
   ['exit', 'יציאה לפי התוכנית', 10],
 ];
-const DEFAULTS = { phase: '1', start: '', risk: 50, maxLoss: 200, target: 200 };
+const DEFAULTS = { phase: '1', start: '', risk: 50, maxLoss: 200 };
 let S = { ...DEFAULTS };
 try { S = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('tj-settings') || '{}') }; } catch {}
 const RULES = () => [
-  `סיכון לעסקה: מקסימום $${S.risk}, מחושב לפני הכניסה.`,
-  'מקסימום 2 הפסדים ביום. אחרי השני סוגרים את הפלטפורמה.',
-  `הפסד יומי מקסימלי: $${S.maxLoss}, עם נעילה אוטומטית בפלטפורמה.`,
-  'אסור להוסיף חוזים לעסקה מפסידה. אף פעם.',
-  'לא מזיזים סטופ אחורה.',
+  '2 עסקאות ב־BE (ברייק איבן)? היום נגמר.',
+  'ניצחון אחד? היום נגמר.',
+  '2 הפסדים? היום נגמר.',
+  'אחרי כל עסקה: הפסקה של 15 דקות לפחות לפני העסקה הבאה.',
+  'אסור להוסיף חוזים לעסקה פתוחה. אף פעם.',
+  `לא עוברים הפסד יומי של $${S.maxLoss}.`,
   'מקסימום 3 עסקאות ביום.',
-  `הגעתי ל־+$${S.target}? מסיים את היום.`,
-  'רק סטאפים מהאסטרטגיה שלי, לא עסקאות של אדמינים.',
-  'בלי לייבים וקהילות בזמן הסשן.',
-  'מצב רגשי מתחת ל־6 מתוך 10? לא סוחר היום.',
 ];
+// Risk rules for the phase check: no adding contracts, daily loss limit.
+const RISK_RULES = [5, 6];
+const BREAK_MIN = 15;
+// Rule numbers from the first rule list (10 rules) -> the current list. Old rules with no match are kept as text.
+const RULES_VERSION = 2;
+const OLD_MAP = { 2: 3, 3: 6, 4: 5, 6: 7 };
+const OLD_TEXT = { 1: 'סיכון לעסקה מעל המותר', 5: 'הזזת סטופ אחורה', 7: 'המשך מסחר אחרי היעד היומי',
+  8: 'סטאפ שלא מהאסטרטגיה', 9: 'לייבים וקהילות בזמן הסשן', 10: 'מצב רגשי מתחת ל־6' };
+function migrateTrade(t) {
+  if (t.rv >= RULES_VERSION) return t;
+  const old = t.broken || [];
+  return { ...t, rv: RULES_VERSION, broken: [...new Set(old.map(b => OLD_MAP[b]).filter(Boolean))],
+    oldBroken: old.filter(b => !OLD_MAP[b]).map(b => OLD_TEXT[b]).filter(Boolean) };
+}
+function migrateDay(d) {
+  if (d.rv >= RULES_VERSION || !d.rules) return { ...d, rv: RULES_VERSION };
+  const next = RULES().map(() => null);
+  d.rules.forEach((v, i) => { const n = OLD_MAP[i + 1]; if (n && v != null) next[n - 1] = v; });
+  return { ...d, rules: next, rv: RULES_VERSION };
+}
+const mins = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
 const DIR = { long: 'לונג', short: 'שורט', neutral: 'ניטרלי' };
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -110,31 +128,31 @@ function gateOf(day) {
   const nos = RULES().map((_, i) => i).filter(i => a[i] === false);
   const moodLow = day.mood != null && day.mood < 6;
   const complete = RULES().every((_, i) => a[i] === true || a[i] === false);
-  return { nos, moodLow, status: nos.length || moodLow ? 'no' : complete ? 'yes' : 'open' };
+  return { nos, moodLow, status: nos.length ? 'no' : complete ? 'yes' : 'open' };
 }
 function analyzeDay(date) {
   const ts = trades.filter(t => t.date === date).sort(byTime);
   const day = dayOf(date);
   const gate = gateOf(day);
   const broken = new Set();
-  let losses = 0, cum = 0;
+  let losses = 0, wins = 0, bes = 0, cum = 0, prev = null;
   ts.forEach(t => {
-    if (losses >= 2) broken.add(2);
-    if (cum >= S.target) broken.add(7);
+    if (bes >= 2) broken.add(1);
+    if (wins >= 1) broken.add(2);
+    if (losses >= 2) broken.add(3);
+    // Times are entry times, so entries less than 15 minutes apart always break the break rule.
+    if (prev && mins(prev.time) != null && mins(t.time) != null && mins(t.time) - mins(prev.time) < BREAK_MIN) broken.add(4);
     if (t.kept === false) (t.broken || []).forEach(b => broken.add(b));
     const p = pnlOf(t);
-    if (p < 0) losses++;
-    cum += p;
+    if (p < 0) losses++; else if (p > 0) wins++; else bes++;
+    cum += p; prev = t;
   });
-  if (cum < -S.maxLoss) broken.add(3);
-  if (ts.length > 3) broken.add(6);
-  if (ts.length && gate.status === 'no') {
-    gate.nos.forEach(i => broken.add(i + 1));
-    if (gate.moodLow) broken.add(10);
-  }
+  if (cum < -S.maxLoss) broken.add(6);
+  if (ts.length > 3) broken.add(7);
+  if (ts.length && gate.status === 'no') gate.nos.forEach(i => broken.add(i + 1));
   const skipped = !ts.length && gate.status === 'no';
   const flagged = ts.some(t => t.kept === false);
-  return { date, n: ts.length, losses, pnl: cum, score: avg(ts.map(scoreOf)), day, gate, skipped,
+  return { date, n: ts.length, losses, wins, bes, last: prev, pnl: cum, score: avg(ts.map(scoreOf)), day, gate, skipped,
     broken: [...broken].sort((a, b) => a - b), kept: skipped || (ts.length > 0 && !broken.size && !flagged) };
 }
 function inRange(date) {
@@ -217,24 +235,27 @@ function renderRules() {
   const v = $('#verdict'), g = a.gate;
   const text = {
     yes: ['מותר לסחור היום.', 'סימנת כן על כל החוקים. המטרה היא 100/100, לא כסף.'],
-    no: ['היום לא סוחרים.', g.moodLow && !g.nos.length ? 'מצב רגשי מתחת ל־6. לדלג על היום זה לעמוד בחוקים.'
-      : 'אם אני סוחר היום, אני עובר על החוקים שלי. לדלג על היום זה לעמוד בחוקים.'],
+    no: ['היום לא סוחרים.', 'אם אני סוחר היום, אני עובר על החוקים שלי. לדלג על היום זה לעמוד בחוקים.'],
     open: ['לפני שפותחים את הגרף:', 'סמן כן או לא ליד כל חוק, ותכתוב איך אתה מרגיש.'],
   }[g.status];
   v.className = 'verdict ' + g.status;
-  v.replaceChildren(text[0], el('small', { textContent: text[1] }));
+  v.replaceChildren(text[0], el('small', { textContent: text[1] }),
+    ...(g.moodLow ? [el('small', { textContent: 'שים לב: מצב רגשי מתחת ל־6. ככה מתחילים הימים שבהם נשברים חוקים.' })] : []));
   $('#d-tiles').replaceChildren(...[
-    ['עסקאות', `${a.n} / 3`], ['הפסדים', `${a.losses} / 2`],
+    ['עסקאות', `${a.n} / 3`], ['ניצחונות', `${a.wins} / 1`], ['הפסדים', `${a.losses} / 2`], ['BE', `${a.bes} / 2`],
     ['רווח/הפסד', money(a.pnl), cls(a.pnl)], ['ציון ממוצע', a.score == null ? '—' : a.score.toFixed(0)],
   ].map(tile));
 
   const lock = $('#lock');
   let msg = '';
   if (date === localDate()) {
-    if (a.losses >= 2) msg = 'הפסד שני. סוגר את הפלטפורמה, היום נגמר.';
+    const since = a.last && mins(a.last.time) != null ? mins(new Date().toTimeString()) - mins(a.last.time) : null;
+    if (a.wins >= 1) msg = 'ניצחון. היום נגמר. סוגר את הפלטפורמה ושומר את הרווח.';
+    else if (a.losses >= 2) msg = 'הפסד שני. סוגר את הפלטפורמה, היום נגמר.';
+    else if (a.bes >= 2) msg = 'שני BE. היום נגמר.';
     else if (a.pnl <= -S.maxLoss) msg = 'הגעת להפסד היומי המקסימלי. היום נגמר.';
-    else if (a.pnl >= S.target) msg = 'הגעת ליעד היומי. מסיים את היום.';
     else if (a.n >= 3) msg = '3 עסקאות היום. מסיים את היום.';
+    else if (since != null && since >= 0 && since < BREAK_MIN) msg = `הפסקה. קם מהמסך. אפשר לחזור בעוד ${BREAK_MIN - since} דקות (נמדד משעת הכניסה של העסקה האחרונה).`;
     else if (a.n && g.status === 'no') msg = 'סימנת שהיום לא סוחרים, ויש עסקאות. עוצר כאן.';
   }
   lock.hidden = !msg; lock.textContent = msg;
@@ -254,12 +275,12 @@ function renderPhase() {
   const all = processDays().filter(d => !S.start || d >= S.start).map(analyzeDay);
   const ds = all.filter(d => d.n);
   const score = avg(trades.filter(t => !S.start || t.date >= S.start).map(scoreOf));
-  const riskBreaks = ds.reduce((s, d) => s + d.broken.filter(b => b <= 4).length, 0);
+  const riskBreaks = ds.reduce((s, d) => s + d.broken.filter(b => RISK_RULES.includes(b)).length, 0);
   const box = $('#phase');
   $('#phase-title').textContent = 'התקדמות בשלב ' + S.phase;
   const rows = [
     ['ציון ממוצע' + (S.phase === '1' ? ' (יעד: 90+)' : ''), score == null ? '—' : score.toFixed(0), score != null && score < 90 ? 'warn' : ''],
-    ['שבירות של חוקי הסיכון 1–4 (יעד: 0)', String(riskBreaks), riskBreaks ? 'warn' : ''],
+    ['שבירות של חוקי הסיכון 5–6 (יעד: 0)', String(riskBreaks), riskBreaks ? 'warn' : ''],
     ['ימים שעמדתי בחוקים (כולל ימים שדילגתי)', keptText(all)],
   ];
   if (S.phase === '1') {
@@ -435,6 +456,7 @@ function renderTable(list) {
       const cell = el('td', { colSpan: 10 });
       const line = (k, v) => v ? cell.append(el('p', {}, el('b', { textContent: k + ': ' }), v)) : null;
       line('חוקים שנשברו', (t.broken || []).map(b => `${b}. ${RULES()[b - 1]}`).join(' · '));
+      line('חוקים מהרשימה הקודמת שנשברו', (t.oldBroken || []).join(' · '));
       line('נקודות שירדו בציון', SCORE.filter(([k]) => !(t.score && t.score[k])).map(([, l, pt]) => `${l} (−${pt})`).join(' · '));
       line('מה הרגשתי', t.notes);
       if (t.images && t.images.length) cell.append(el('div', { className: 'thumbs' }, ...t.images.map(thumb)));
@@ -481,7 +503,8 @@ function readForm() {
     r: parseNum(e.r.value) == null || isNaN(parseNum(e.r.value)) ? null : sign * Math.abs(parseNum(e.r.value)),
     score: Object.fromEntries($$('#score input').map(i => [i.value, i.checked])),
     kept, broken: kept === false ? $$('#broken input:checked').map(i => Number(i.value)) : [],
-    notes: e.notes.value.trim(), images,
+    notes: e.notes.value.trim(), images, rv: RULES_VERSION,
+    oldBroken: editing ? editing.oldBroken || [] : [],
   };
 }
 function updateForm() {
@@ -563,8 +586,8 @@ function render() {
   renderBars('#by-day', list, t => [DAYS[new Date(t.date + 'T12:00').getDay()]], DAYS);
 }
 async function refresh() {
-  trades = await store('trades', 'readonly', s => s.getAll());
-  days = new Map((await store('days', 'readonly', s => s.getAll())).map(d => [d.date, d]));
+  trades = (await store('trades', 'readonly', s => s.getAll())).map(migrateTrade);
+  days = new Map((await store('days', 'readonly', s => s.getAll())).map(d => [d.date, migrateDay(d)]));
   render();
 }
 
