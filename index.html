@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>יומן מסחר – משמעת ועקביות</title>
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <header class="top">
@@ -106,14 +106,13 @@
   <!-- 3. Journal -->
   <section id="view-journal" class="view" hidden>
     <div class="filters">
-      <label>מתאריך <input type="date" id="f-from"></label>
-      <label>עד תאריך <input type="date" id="f-to"></label>
-      <button id="f-clear" class="ghost">נקה סינון</button>
+      <label>חודש <select class="month-select" id="m-journal"></select></label>
+      <span id="month-count" class="muted"></span>
     </div>
     <div class="card table-wrap">
       <table id="trades-table">
         <thead><tr>
-          <th>תאריך</th><th>מדד</th><th>כיוון</th><th>תוצאה</th><th>רווח/הפסד</th><th>R</th><th>ציון</th><th>חוקים</th><th>תמונה</th><th></th>
+          <th>#</th><th>תאריך</th><th>מדד</th><th>כיוון</th><th>תוצאה</th><th>רווח/הפסד</th><th>R</th><th>ציון</th><th>חוקים</th><th>תמונה</th><th></th>
         </tr></thead>
         <tbody></tbody>
       </table>
@@ -123,7 +122,12 @@
 
   <!-- 4. Summary -->
   <section id="view-summary" class="view" hidden>
+    <div class="monthbar">
+      <h2 id="month-title">דאשבורד</h2>
+      <label>חודש <select class="month-select" id="m-summary"></select></label>
+    </div>
     <div class="tiles" id="tiles"></div>
+    <div class="card"><h2>איפה הכסף הולך</h2><div id="leaks"></div></div>
     <div class="grid2">
       <div class="card"><h2 id="phase-title">התקדמות בשלב</h2><div id="phase"></div></div>
       <div class="card"><h2>סיכום שבועי</h2><div id="week"></div></div>
@@ -139,7 +143,10 @@
     <div class="grid2">
       <div class="card"><h2>רווח/הפסד: עמדתי בחוקים מול שברתי חוק</h2><div id="by-kept"></div></div>
       <div class="card"><h2>כמה עלה לי כל חוק שנשבר</h2><div id="by-rule"></div></div>
-      <div class="card"><h2>רווח/הפסד לפי מדד</h2><div id="by-symbol"></div></div>
+      <div class="card"><h2>רווח/הפסד: לונג מול שורט</h2><div id="by-dir"></div></div>
+      <div class="card"><h2>רווח/הפסד לפי מה שעבר לי בראש</h2><div id="by-mind"></div></div>
+      <div class="card"><h2>רווח/הפסד לפי איך יצאתי</h2><div id="by-exit"></div></div>
+      <div class="card"><h2>רווח/הפסד לפי סטאפ</h2><div id="by-setup"></div></div>
       <div class="card"><h2>רווח/הפסד לפי יום בשבוע</h2><div id="by-day"></div></div>
     </div>
     <div class="card table-wrap"><table id="days-table">
@@ -181,6 +188,22 @@
         <label>כמה R <input type="text" name="r" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="2 או ‎-1"></label>
       </div>
     </fieldset>
+    <fieldset><legend>ניהול העסקה</legend>
+      <div class="fgrid">
+        <label>סטאפ <input name="setup" list="setups" autocomplete="off" placeholder="למשל: FVG שעתי + SMT"></label>
+        <label>כמה סיכנתי ($) <input type="text" name="risk" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+        <label>יחס מתוכנן (1:X) <input type="text" name="rr" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="2"></label>
+        <label>שעת יציאה <input type="time" name="exitTime"></label>
+      </div>
+      <datalist id="setups"></datalist>
+      <div class="q" id="q-struct"></div>
+      <div class="q" id="q-mind"></div>
+      <div class="q" id="q-reentry"></div>
+      <div class="q" id="q-be"></div>
+      <div class="q" id="q-exit"></div>
+      <div class="q" id="q-hit" hidden></div>
+      <div id="mg-warn" class="warn mg-warn"></div>
+    </fieldset>
     <fieldset><legend>ציון 100/100</legend>
       <div id="score" class="checklist"></div>
       <div class="calc">ציון העסקה: <b id="score-total" class="num">0 / 100</b></div>
@@ -197,6 +220,7 @@
     </fieldset>
     <fieldset><legend>מה הרגשתי</legend>
       <textarea name="notes" rows="3" placeholder="כמה מילים: מה הרגשתי, מה עבר לי בראש"></textarea>
+      <label>מה אעשה אחרת בפעם הבאה <textarea name="lesson" rows="2"></textarea></label>
     </fieldset>
     <fieldset><legend>תמונה של העסקה</legend>
       <div class="row">
@@ -214,6 +238,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

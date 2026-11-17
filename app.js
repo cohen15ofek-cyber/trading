@@ -41,8 +41,22 @@ function migrateDay(d) {
   d.rules.forEach((v, i) => { const n = OLD_MAP[i + 1]; if (n && v != null) next[n - 1] = v; });
   return { ...d, rules: next, rv: RULES_VERSION };
 }
+const endOf = t => mins(t.exitTime) != null ? mins(t.exitTime) : mins(t.time);
 const mins = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
 const DIR = { long: 'לונג', short: 'שורט', neutral: 'ניטרלי' };
+const MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+// Trade management questions. Each answer is optional, so old trades and quick entries still work.
+const Q = {
+  exit: ['איך יצאתי', [['tp', 'טייק פרופיט'], ['sl', 'סטופ'], ['be', 'ברייק איבן'], ['manual', 'יציאה ידנית']]],
+  be: ['מתי העברתי לברייק איבן', [['none', 'לא העברתי'], ['early', 'לפני 1R'], ['late', 'אחרי 1R']]],
+  hit: ['אחרי שיצאתי, המחיר הגיע ליעד שלי?', [['yes', 'כן'], ['no', 'לא'], ['unk', 'לא בדקתי']]],
+  reentry: ['כניסה חוזרת לאותו רעיון אחרי סטופ או BE?', [['yes', 'כן'], ['no', 'לא']]],
+  struct: ['ביחס למבנה של 15 דקות', [['with', 'עם המבנה'], ['against', 'נגד המבנה']]],
+  mind: ['מה עבר לי בראש בכניסה', [['calm', 'רגוע, לפי התוכנית'], ['sure', '"אני בטוח"'], ['fomo', 'FOMO'],
+    ['revenge', 'להחזיר הפסד'], ['fear', 'פחד / היסוס']]],
+};
+const qLabel = (k, v) => (Q[k][1].find(o => o[0] === v) || [, ''])[1];
+const monthName = m => m === 'all' ? 'כל הזמן' : `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -102,7 +116,7 @@ const parseNum = s => {
   return isFinite(v) && t.replace(/[-\u2212]/g, '') !== '' ? (neg ? -v : v) : NaN;
 };
 const resultOf = t => { const p = pnlOf(t); return p > 0 ? ['win', 'ניצחון'] : p < 0 ? ['loss', 'הפסד'] : ['be', 'BE']; };
-const byTime = (a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''));
+const byTime = (a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')) || String(a.id).localeCompare(String(b.id));
 
 /* ---------- state ---------- */
 let trades = [];
@@ -112,6 +126,8 @@ let images = [];
 let openDetail = null;
 let scEditing = null;
 let scImage = null;
+let month = localDate().slice(0, 7);
+let numbering = new Map();
 
 const curDate = () => $('#day').value || localDate();
 const dayOf = date => days.get(date) || { date };
@@ -140,8 +156,8 @@ function analyzeDay(date) {
     if (bes >= 2) broken.add(1);
     if (wins >= 1) broken.add(2);
     if (losses >= 2) broken.add(3);
-    // Times are entry times, so entries less than 15 minutes apart always break the break rule.
-    if (prev && mins(prev.time) != null && mins(t.time) != null && mins(t.time) - mins(prev.time) < BREAK_MIN) broken.add(4);
+    // Measured from the previous exit time, or its entry time when no exit time was written.
+    if (prev && endOf(prev) != null && mins(t.time) != null && mins(t.time) - endOf(prev) < BREAK_MIN) broken.add(4);
     if (t.kept === false) (t.broken || []).forEach(b => broken.add(b));
     const p = pnlOf(t);
     if (p < 0) losses++; else if (p > 0) wins++; else bes++;
@@ -155,10 +171,7 @@ function analyzeDay(date) {
   return { date, n: ts.length, losses, wins, bes, last: prev, pnl: cum, score: avg(ts.map(scoreOf)), day, gate, skipped,
     broken: [...broken].sort((a, b) => a - b), kept: skipped || (ts.length > 0 && !broken.size && !flagged) };
 }
-function inRange(date) {
-  const from = $('#f-from').value, to = $('#f-to').value;
-  return (!from || date >= from) && (!to || date <= to);
-}
+const inRange = date => month === 'all' || date.startsWith(month);
 const filtered = () => trades.filter(t => inRange(t.date)).sort(byTime);
 const tradingDays = () => [...new Set(trades.map(t => t.date))].sort();
 // Days that count for the process: days with trades, and days that were skipped because of the rules.
@@ -249,13 +262,13 @@ function renderRules() {
   const lock = $('#lock');
   let msg = '';
   if (date === localDate()) {
-    const since = a.last && mins(a.last.time) != null ? mins(new Date().toTimeString()) - mins(a.last.time) : null;
+    const since = a.last && endOf(a.last) != null ? mins(new Date().toTimeString()) - endOf(a.last) : null;
     if (a.wins >= 1) msg = 'ניצחון. היום נגמר. סוגר את הפלטפורמה ושומר את הרווח.';
     else if (a.losses >= 2) msg = 'הפסד שני. סוגר את הפלטפורמה, היום נגמר.';
     else if (a.bes >= 2) msg = 'שני BE. היום נגמר.';
     else if (a.pnl <= -S.maxLoss) msg = 'הגעת להפסד היומי המקסימלי. היום נגמר.';
     else if (a.n >= 3) msg = '3 עסקאות היום. מסיים את היום.';
-    else if (since != null && since >= 0 && since < BREAK_MIN) msg = `הפסקה. קם מהמסך. אפשר לחזור בעוד ${BREAK_MIN - since} דקות (נמדד משעת הכניסה של העסקה האחרונה).`;
+    else if (since != null && since >= 0 && since < BREAK_MIN) msg = `הפסקה. קם מהמסך. אפשר לחזור בעוד ${BREAK_MIN - since} דקות (נמדד משעת היציאה, או משעת הכניסה אם לא רשמת יציאה).`;
     else if (a.n && g.status === 'no') msg = 'סימנת שהיום לא סוחרים, ויש עסקאות. עוצר כאן.';
   }
   lock.hidden = !msg; lock.textContent = msg;
@@ -317,18 +330,46 @@ function renderWeek() {
 }
 function renderTiles(list) {
   const p = list.map(pnlOf);
-  const wins = p.filter(x => x > 0), net = p.reduce((s, x) => s + x, 0);
+  const w = p.filter(x => x > 0).length, l = p.filter(x => x < 0).length, net = p.reduce((s, x) => s + x, 0);
   const rs = list.map(rOf).filter(x => x != null);
   const sc = avg(list.map(scoreOf));
   const ds = processDays().filter(inRange).map(analyzeDay);
+  $('#month-title').textContent = 'דאשבורד · ' + monthName(month);
   $('#tiles').replaceChildren(...[
+    [month === 'all' ? 'עסקאות' : 'עסקאות החודש', String(list.length)],
+    ['סה״כ עסקאות מאז ההתחלה', String(trades.length)],
+    ['ניצחון / הפסד / BE', `${w} / ${l} / ${list.length - w - l}`],
+    ['רווח/הפסד נקי', money(net), cls(net)],
+    ['אחוז הצלחה (בלי BE)', w + l ? (w / (w + l) * 100).toFixed(0) + '%' : '—'],
+    ['R ממוצע', rs.length ? num(avg(rs)) + 'R' : '—'],
     ['ימים שעמדתי בחוקים', ds.length ? keptText(ds) : '—'],
     ['עסקאות שעמדו בחוקים', list.length ? `${list.filter(t => t.kept !== false).length} / ${list.length}` : '—'],
     ['ציון ממוצע', sc == null ? '—' : sc.toFixed(0)],
-    ['רווח/הפסד נקי', money(net), cls(net)],
-    ['אחוז הצלחה', list.length ? (wins.length / list.length * 100).toFixed(0) + '%' : '—'],
-    ['R ממוצע', rs.length ? num(avg(rs)) + 'R' : '—'],
   ].map(tile));
+}
+// Where the money goes: the patterns from the review, counted for the chosen month.
+function renderLeaks(list) {
+  const sum = ts => ts.reduce((s, t) => s + pnlOf(t), 0);
+  const row = (k, ts, bad = true) => [k, ts.length ? `${ts.length === 1 ? 'עסקה אחת' : ts.length + ' עסקאות'} · ${money(sum(ts))}` : '0', ts.length && bad ? 'warn' : ''];
+  const rr = list.map(t => t.rr).filter(x => x != null);
+  const early = list.filter(t => t.be === 'early');
+  const missed = list.filter(t => t.hit === 'yes' && pnlOf(t) <= 0);
+  const overRisk = list.filter(t => t.risk != null && t.risk > S.risk);
+  const undocumented = list.filter(t => !t.exit || !t.mind || !t.struct || t.risk == null);
+  const box = $('#leaks');
+  if (!list.length) { box.replaceChildren(el('p', { className: 'muted', textContent: 'אין עסקאות בתקופה הזו.' })); return; }
+  box.replaceChildren(kv([
+    row('עסקאות ששברו חוק', list.filter(t => t.kept === false)),
+    row('כניסה חוזרת אחרי סטופ או BE', list.filter(t => t.reentry === 'yes')),
+    row('עסקאות נגד המבנה של 15 דקות', list.filter(t => t.struct === 'against')),
+    row('כניסה מתוך "אני בטוח" / FOMO / נקמה / פחד', list.filter(t => t.mind && t.mind !== 'calm')),
+    [`סיכון מעל $${S.risk}`, String(overRisk.length), overRisk.length ? 'warn' : ''],
+    ['יחס מתוכנן ממוצע (יעד: 2 ומעלה)', rr.length ? `1:${num(avg(rr), 1)} · ${rr.filter(x => x < 2).length} עסקאות מתחת ל־2` : '—',
+      rr.length && avg(rr) < 2 ? 'warn' : ''],
+    ['העברה לברייק איבן לפני 1R', String(early.length), early.length ? 'warn' : ''],
+    ['ניצחונות שפספסתי (יצאתי, והמחיר הגיע ליעד)', String(missed.length), missed.length ? 'warn' : ''],
+    ['עסקאות בלי ניהול עסקה מתועד', `${undocumented.length} מתוך ${list.length}`, undocumented.length ? 'warn' : ''],
+  ]));
 }
 function renderDays() {
   const all = [...new Set([...processDays(), ...days.keys()])].filter(inRange).sort().reverse();
@@ -445,7 +486,7 @@ function renderTable(list) {
       el('button', { className: 'link', textContent: 'מחיקה', onclick: async () => {
         if (confirm('למחוק את העסקה?')) { await store('trades', 'readwrite', s => s.delete(t.id)); await refresh(); } } }));
     body.append(el('tr', {},
-      td(t.date + (t.time ? ' ' + t.time : ''), 'num'), td(t.symbol, 'ltr'), td(DIR[t.dir] || ''),
+      td('#' + numbering.get(t.id), 'num muted'), td(t.date + (t.time ? ' ' + t.time : ''), 'num'), td(t.symbol, 'ltr'), td(DIR[t.dir] || ''),
       el('td', {}, el('span', { className: 'res ' + resultOf(t)[0], textContent: resultOf(t)[1] })),
       td(money(p), 'num ' + cls(p)), td(r == null ? '—' : num(r) + 'R', 'num'), td(String(scoreOf(t)), 'num'),
       td(rulesLabel(t), t.kept === false ? 'warn' : t.kept === true ? 'ok' : ''),
@@ -453,10 +494,14 @@ function renderTable(list) {
         onclick: () => view(t.images[0]) }), ...(t.images.length > 1 ? [el('span', { className: 'muted', textContent: ' +' + (t.images.length - 1) })] : [])] : ['—'])),
       actions));
     if (openDetail === t.id) {
-      const cell = el('td', { colSpan: 10 });
+      const cell = el('td', { colSpan: 11 });
       const line = (k, v) => v ? cell.append(el('p', {}, el('b', { textContent: k + ': ' }), v)) : null;
+      line('ניהול העסקה', [t.setup && 'סטאפ: ' + t.setup, t.risk != null && 'סיכון: $' + t.risk, t.rr != null && 'יחס: 1:' + t.rr,
+        t.exitTime && 'יציאה ב־' + t.exitTime, ...Object.keys(Q).filter(k => t[k]).map(k => `${Q[k][0]}: ${qLabel(k, t[k])}`)]
+        .filter(Boolean).join(' · '));
       line('חוקים שנשברו', (t.broken || []).map(b => `${b}. ${RULES()[b - 1]}`).join(' · '));
       line('חוקים מהרשימה הקודמת שנשברו', (t.oldBroken || []).join(' · '));
+      line('מה אעשה אחרת', t.lesson);
       line('נקודות שירדו בציון', SCORE.filter(([k]) => !(t.score && t.score[k])).map(([, l, pt]) => `${l} (−${pt})`).join(' · '));
       line('מה הרגשתי', t.notes);
       if (t.images && t.images.length) cell.append(el('div', { className: 'thumbs' }, ...t.images.map(thumb)));
@@ -476,7 +521,16 @@ function openForm(t) {
   const e = f.elements;
   e.date.value = t ? t.date : curDate();
   e.time.value = t ? t.time || '' : new Date().toTimeString().slice(0, 5);
-  e.symbol.value = t && [...e.symbol.options].some(o => o.value === t.symbol) ? t.symbol : 'NQ';
+  const lastSymbol = trades.length ? [...trades].sort(byTime).at(-1).symbol : 'MNQ';
+  const sym = t ? t.symbol : lastSymbol;
+  e.symbol.value = [...e.symbol.options].some(o => o.value === sym) ? sym : 'MNQ';
+  e.setup.value = t ? t.setup || '' : '';
+  e.risk.value = t && t.risk != null ? t.risk : '';
+  e.rr.value = t && t.rr != null ? t.rr : '';
+  e.exitTime.value = t ? t.exitTime || '' : '';
+  e.lesson.value = t ? t.lesson || '' : '';
+  for (const k of Object.keys(Q)) if (t && t[k]) e[k].value = t[k];
+  e.risk.placeholder = String(S.risk);
   e.dir.value = t ? t.dir : 'long';
   if (t) {
     const p = pnlOf(t), r = rOf(t);
@@ -492,6 +546,7 @@ function openForm(t) {
   renderThumbs(); updateForm();
   $('#dlg').showModal();
 }
+const okNum = s => { const v = parseNum(s); return v == null || isNaN(v) ? null : v; };
 function readForm() {
   const e = $('#form').elements;
   const sign = e.res.value === 'loss' ? -1 : e.res.value === 'be' ? 0 : 1;
@@ -504,11 +559,30 @@ function readForm() {
     score: Object.fromEntries($$('#score input').map(i => [i.value, i.checked])),
     kept, broken: kept === false ? $$('#broken input:checked').map(i => Number(i.value)) : [],
     notes: e.notes.value.trim(), images, rv: RULES_VERSION,
+    setup: e.setup.value.trim(), exitTime: e.exitTime.value, lesson: e.lesson.value.trim(),
+    risk: okNum(e.risk.value) == null ? null : Math.abs(okNum(e.risk.value)),
+    rr: okNum(e.rr.value) == null ? null : Math.abs(okNum(e.rr.value)),
+    ...Object.fromEntries(Object.keys(Q).map(k => [k, k === 'hit' && $('#q-hit').hidden ? null : e[k].value || null])),
     oldBroken: editing ? editing.oldBroken || [] : [],
   };
 }
 function updateForm() {
   const e = $('#form').elements;
+  // Answers that contradict a score box clear it, so a trade can't score 100 on paper.
+  const risk = okNum(e.risk.value), rr = okNum(e.rr.value);
+  const over = risk != null && Math.abs(risk) > S.risk;
+  const lock = (k, on) => { const i = $(`#score input[value=${k}]`); if (on) i.checked = false; i.disabled = on; };
+  lock('risk', over);
+  lock('calm', !!e.mind.value && e.mind.value !== 'calm');
+  lock('noadd', e.kept.value === 'no' && $$('#broken input:checked').some(i => i.value === '5'));
+  $('#q-hit').hidden = !['sl', 'be', 'manual'].includes(e.exit.value);
+  $('#mg-warn').replaceChildren(...[
+    over && `סיכנת $${Math.abs(risk)}, מעל המותר ($${S.risk}).`,
+    rr != null && Math.abs(rr) < 2 && 'יחס מתוכנן מתחת ל־1:2.',
+    e.reentry.value === 'yes' && 'כניסה חוזרת לאותו רעיון: זה הרגע שבו נשברים אצלך חוקים.',
+  ].filter(Boolean).map(x => el('div', { textContent: x })));
+  e.risk.setCustomValidity(isNaN(parseNum(e.risk.value)) ? 'צריך מספר, למשל 50' : '');
+  e.rr.setCustomValidity(isNaN(parseNum(e.rr.value)) ? 'צריך מספר, למשל 2' : '');
   $('#score-total').textContent = scoreOf(readForm()) + ' / 100';
   $('#broken-box').hidden = e.kept.value !== 'no';
   // Typing a minus sign (e.g. -1R or -50) marks the trade as a loss on its own.
@@ -563,10 +637,12 @@ function download(name, text, type) {
   document.body.append(a); a.click(); a.remove();
 }
 function toCsv(list) {
-  const head = ['date', 'time', 'symbol', 'direction', 'pnl', 'R', 'score', 'kept_rules', 'broken_rules', 'notes'];
+  const head = ['#', 'date', 'time', 'exit_time', 'symbol', 'direction', 'setup', 'risk', 'planned_rr', 'pnl', 'R', 'score', 'kept_rules',
+    'broken_rules', ...Object.keys(Q), 'notes', 'lesson'];
   const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const rows = list.map(t => { const r = rOf(t); return [t.date, t.time, t.symbol, t.dir, pnlOf(t).toFixed(2), r == null ? '' : r.toFixed(2),
-    scoreOf(t), t.kept == null ? '' : t.kept ? 'yes' : 'no', (t.broken || []).join('; '), t.notes].map(q).join(','); });
+  const rows = list.map(t => { const r = rOf(t); return [numbering.get(t.id), t.date, t.time, t.exitTime, t.symbol, t.dir, t.setup, t.risk, t.rr,
+    pnlOf(t).toFixed(2), r == null ? '' : r.toFixed(2), scoreOf(t), t.kept == null ? '' : t.kept ? 'yes' : 'no',
+    (t.broken || []).join('; '), ...Object.keys(Q).map(k => t[k] ? qLabel(k, t[k]) : ''), t.notes, t.lesson].map(q).join(','); });
   return '﻿' + [head.join(','), ...rows].join('\r\n');
 }
 
@@ -576,18 +652,35 @@ function showView(name) {
   $$('.view').forEach(v => { v.hidden = v.id !== 'view-' + name; });
   $('#daybar').hidden = !['pre', 'rules'].includes(name);
 }
+function renderMonths() {
+  const ms = [...new Set([localDate().slice(0, 7), ...trades.map(t => t.date.slice(0, 7)), ...[...days.keys()].map(d => d.slice(0, 7))])]
+    .sort().reverse();
+  for (const sel of $$('.month-select')) {
+    sel.replaceChildren(...[...ms, 'all'].map(m => el('option', { value: m, textContent: monthName(m) })));
+    sel.value = month;
+  }
+  const n = trades.filter(t => inRange(t.date)).length;
+  $('#month-count').textContent = month === 'all' ? `${trades.length} עסקאות סה״כ`
+    : `${n} עסקאות ב${monthName(month)} · ${trades.length} עסקאות סה״כ מאז ההתחלה`;
+  $('#setups').replaceChildren(...[...new Set(trades.map(t => t.setup).filter(Boolean))].sort().map(s => el('option', { value: s })));
+}
 function render() {
   const list = filtered();
-  renderPre(); renderRules(); renderTable(list);
-  renderTiles(list); renderPhase(); renderWeek(); renderScores(); renderEquity(list); renderDays();
+  renderMonths(); renderPre(); renderRules(); renderTable(list);
+  renderTiles(list); renderLeaks(list); renderPhase(); renderWeek(); renderScores(); renderEquity(list); renderDays();
   renderBars('#by-kept', list, t => [t.kept === false ? 'שברתי חוק' : 'עמדתי בחוקים'], ['עמדתי בחוקים', 'שברתי חוק']);
   renderBars('#by-rule', list.filter(t => t.kept === false), t => (t.broken || []).length ? t.broken.map(b => 'חוק ' + b) : ['לא צוין']);
-  renderBars('#by-symbol', list, t => [t.symbol || '—']);
+  renderBars('#by-dir', list, t => [DIR[t.dir] || '—'], ['לונג', 'שורט', 'ניטרלי']);
+  renderBars('#by-mind', list.filter(t => t.mind), t => [qLabel('mind', t.mind)], Q.mind[1].map(o => o[1]));
+  renderBars('#by-exit', list.filter(t => t.exit), t => [qLabel('exit', t.exit)], Q.exit[1].map(o => o[1]));
+  renderBars('#by-setup', list, t => [t.setup || 'לא צוין']);
   renderBars('#by-day', list, t => [DAYS[new Date(t.date + 'T12:00').getDay()]], DAYS);
 }
 async function refresh() {
   trades = (await store('trades', 'readonly', s => s.getAll())).map(migrateTrade);
   days = new Map((await store('days', 'readonly', s => s.getAll())).map(d => [d.date, migrateDay(d)]));
+  // Trade numbers run in time order over all trades, so #1 is the first trade ever logged.
+  numbering = new Map([...trades].sort(byTime).map((t, i) => [t.id, i + 1]));
   render();
 }
 
@@ -597,8 +690,11 @@ async function init() {
     el('span', { className: 'pts num', textContent: String(p) }))));
   $('#broken').replaceChildren(...RULES().map((r, i) => el('label', {}, el('input', { type: 'checkbox', value: String(i + 1) }), `${i + 1}. ${r}`)));
   $$('.tabs button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
-  $$('.filters input').forEach(i => i.addEventListener('change', render));
-  $('#f-clear').onclick = () => { $$('.filters input').forEach(i => { i.value = ''; }); render(); };
+  $$('.month-select').forEach(sel => sel.addEventListener('change', () => { month = sel.value; render(); }));
+  for (const [k, [label, opts]] of Object.entries(Q)) {
+    $('#q-' + k).replaceChildren(el('span', { className: 'q-label', textContent: label }),
+      el('div', { className: 'seg' }, ...opts.map(([v, t]) => el('label', {}, el('input', { type: 'radio', name: k, value: v }), t))));
+  }
 
   $('#day').value = localDate();
   $('#day').addEventListener('change', () => { if (!$('#day').value) $('#day').value = localDate(); loadDayForms(); render(); });
