@@ -95,7 +95,7 @@
               <select id="s-phase"><option value="1">שלב 1 – מיקרו</option><option value="2">שלב 2 – סיכון מלא</option><option value="3">שלב 3 – הגדלה</option></select>
             </label>
             <label>תאריך תחילת השלב <input type="date" id="s-start"></label>
-            <label>סיכון מקסימלי לעסקה ($) <input type="number" id="s-risk" min="1" step="1"></label>
+            <label>מקסימום חוזי מיקרו לעסקה <input type="number" id="s-maxContracts" min="1" step="1"></label>
             <label>הפסד יומי מקסימלי ($) <input type="number" id="s-maxLoss" min="1" step="1"></label>
           </div>
         </details>
@@ -191,10 +191,12 @@
     <fieldset><legend>ניהול העסקה</legend>
       <div class="fgrid">
         <label>סטאפ <input name="setup" list="setups" autocomplete="off" placeholder="למשל: FVG שעתי + SMT"></label>
-        <label>כמה סיכנתי ($) <input type="text" name="risk" dir="ltr" inputmode="decimal" autocomplete="off"></label>
+        <label>חוזים <input type="text" name="qty" dir="ltr" inputmode="numeric" autocomplete="off"></label>
+        <label>סטופ (נקודות) <input type="text" name="stopPts" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="40"></label>
         <label>יחס מתוכנן (1:X) <input type="text" name="rr" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="2"></label>
         <label>שעת יציאה <input type="time" name="exitTime"></label>
       </div>
+      <div id="risk-calc" class="calc"></div>
       <datalist id="setups"></datalist>
       <div class="q" id="q-struct"></div>
       <div class="q" id="q-mind"></div>
@@ -238,6 +240,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

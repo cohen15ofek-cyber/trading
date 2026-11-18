@@ -3,13 +3,18 @@ const LEGACY_POINT_VALUE = { NQ: 20, MNQ: 2 };
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 const SCORE = [
   ['setup', 'סטאפ מהאסטרטגיה שלי', 25],
-  ['risk', 'סיכון בגבול המותר, מחושב מראש', 20],
+  ['risk', 'גודל פוזיציה לפי התוכנית, סטופ מחושב מראש', 20],
   ['stop', 'סטופ מוגדר מראש ולא הוזז אחורה', 20],
   ['noadd', 'לא הוספתי חוזים למפסידה', 15],
   ['calm', 'כניסה רגועה, לא מתוך FOMO או נקמה', 10],
   ['exit', 'יציאה לפי התוכנית', 10],
 ];
-const DEFAULTS = { phase: '1', start: '', risk: 50, maxLoss: 200 };
+const DEFAULTS = { phase: '1', start: '', maxContracts: 1, maxLoss: 200 };
+// Dollars per point, to turn a stop in points into dollars at risk.
+const POINT_VALUE = { NQ: 20, MNQ: 2, ES: 50, MES: 5 };
+// The position-size rule: at most S.maxContracts micro contracts. A full-size contract counts as 10 micros.
+const MICROS = { MNQ: 1, MES: 1, NQ: 10, ES: 10 };
+const overSize = t => t.qty != null && t.qty * (MICROS[t.symbol] || 1) > S.maxContracts;
 let S = { ...DEFAULTS };
 try { S = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('tj-settings') || '{}') }; } catch {}
 const RULES = () => [
@@ -354,8 +359,9 @@ function renderLeaks(list) {
   const rr = list.map(t => t.rr).filter(x => x != null);
   const early = list.filter(t => t.be === 'early');
   const missed = list.filter(t => t.hit === 'yes' && pnlOf(t) <= 0);
-  const overRisk = list.filter(t => t.risk != null && t.risk > S.risk);
-  const undocumented = list.filter(t => !t.exit || !t.mind || !t.struct || t.risk == null);
+  const overRisk = list.filter(overSize);
+  const risks = list.map(t => t.risk).filter(x => x != null);
+  const undocumented = list.filter(t => !t.exit || !t.mind || !t.struct || t.stopPts == null);
   const box = $('#leaks');
   if (!list.length) { box.replaceChildren(el('p', { className: 'muted', textContent: 'אין עסקאות בתקופה הזו.' })); return; }
   box.replaceChildren(kv([
@@ -363,7 +369,8 @@ function renderLeaks(list) {
     row('כניסה חוזרת אחרי סטופ או BE', list.filter(t => t.reentry === 'yes')),
     row('עסקאות נגד המבנה של 15 דקות', list.filter(t => t.struct === 'against')),
     row('כניסה מתוך "אני בטוח" / FOMO / נקמה / פחד', list.filter(t => t.mind && t.mind !== 'calm')),
-    [`סיכון מעל $${S.risk}`, String(overRisk.length), overRisk.length ? 'warn' : ''],
+    [`פוזיציה גדולה מ־${S.maxContracts} מיקרו`, String(overRisk.length), overRisk.length ? 'warn' : ''],
+    ['סיכון ממוצע לעסקה · הסיכון הכי גדול', risks.length ? `${money(avg(risks)).replace('+', '')} · ${money(Math.max(...risks)).replace('+', '')}` : '—'],
     ['יחס מתוכנן ממוצע (יעד: 2 ומעלה)', rr.length ? `1:${num(avg(rr), 1)} · ${rr.filter(x => x < 2).length} עסקאות מתחת ל־2` : '—',
       rr.length && avg(rr) < 2 ? 'warn' : ''],
     ['העברה לברייק איבן לפני 1R', String(early.length), early.length ? 'warn' : ''],
@@ -496,7 +503,7 @@ function renderTable(list) {
     if (openDetail === t.id) {
       const cell = el('td', { colSpan: 11 });
       const line = (k, v) => v ? cell.append(el('p', {}, el('b', { textContent: k + ': ' }), v)) : null;
-      line('ניהול העסקה', [t.setup && 'סטאפ: ' + t.setup, t.risk != null && 'סיכון: $' + t.risk, t.rr != null && 'יחס: 1:' + t.rr,
+      line('ניהול העסקה', [t.setup && 'סטאפ: ' + t.setup, t.qty != null && `${t.qty} חוזים`, t.stopPts != null && `סטופ ${t.stopPts} נק׳`, t.risk != null && 'סיכון: $' + t.risk, t.rr != null && 'יחס: 1:' + t.rr,
         t.exitTime && 'יציאה ב־' + t.exitTime, ...Object.keys(Q).filter(k => t[k]).map(k => `${Q[k][0]}: ${qLabel(k, t[k])}`)]
         .filter(Boolean).join(' · '));
       line('חוקים שנשברו', (t.broken || []).map(b => `${b}. ${RULES()[b - 1]}`).join(' · '));
@@ -525,12 +532,12 @@ function openForm(t) {
   const sym = t ? t.symbol : lastSymbol;
   e.symbol.value = [...e.symbol.options].some(o => o.value === sym) ? sym : 'MNQ';
   e.setup.value = t ? t.setup || '' : '';
-  e.risk.value = t && t.risk != null ? t.risk : '';
+  e.qty.value = t && t.qty != null ? t.qty : 1;
+  e.stopPts.value = t && t.stopPts != null ? t.stopPts : '';
   e.rr.value = t && t.rr != null ? t.rr : '';
   e.exitTime.value = t ? t.exitTime || '' : '';
   e.lesson.value = t ? t.lesson || '' : '';
   for (const k of Object.keys(Q)) if (t && t[k]) e[k].value = t[k];
-  e.risk.placeholder = String(S.risk);
   e.dir.value = t ? t.dir : 'long';
   if (t) {
     const p = pnlOf(t), r = rOf(t);
@@ -546,6 +553,9 @@ function openForm(t) {
   renderThumbs(); updateForm();
   $('#dlg').showModal();
 }
+// Dollars at risk = stop in points x dollars per point x contracts.
+const riskOf = e => { const q = okNum(e.qty.value), s = okNum(e.stopPts.value);
+  return q == null || s == null ? null : Math.abs(q) * Math.abs(s) * (POINT_VALUE[e.symbol.value] || 2); };
 const okNum = s => { const v = parseNum(s); return v == null || isNaN(v) ? null : v; };
 function readForm() {
   const e = $('#form').elements;
@@ -560,7 +570,9 @@ function readForm() {
     kept, broken: kept === false ? $$('#broken input:checked').map(i => Number(i.value)) : [],
     notes: e.notes.value.trim(), images, rv: RULES_VERSION,
     setup: e.setup.value.trim(), exitTime: e.exitTime.value, lesson: e.lesson.value.trim(),
-    risk: okNum(e.risk.value) == null ? null : Math.abs(okNum(e.risk.value)),
+    qty: okNum(e.qty.value) == null ? null : Math.abs(okNum(e.qty.value)),
+    stopPts: okNum(e.stopPts.value) == null ? null : Math.abs(okNum(e.stopPts.value)),
+    risk: riskOf(e) ?? (editing && editing.stopPts == null ? editing.risk ?? null : null),
     rr: okNum(e.rr.value) == null ? null : Math.abs(okNum(e.rr.value)),
     ...Object.fromEntries(Object.keys(Q).map(k => [k, k === 'hit' && $('#q-hit').hidden ? null : e[k].value || null])),
     oldBroken: editing ? editing.oldBroken || [] : [],
@@ -569,19 +581,22 @@ function readForm() {
 function updateForm() {
   const e = $('#form').elements;
   // Answers that contradict a score box clear it, so a trade can't score 100 on paper.
-  const risk = okNum(e.risk.value), rr = okNum(e.rr.value);
-  const over = risk != null && Math.abs(risk) > S.risk;
+  const rr = okNum(e.rr.value), risk = riskOf(e);
+  const qty = okNum(e.qty.value);
+  const over = overSize({ qty: qty == null ? null : Math.abs(qty), symbol: e.symbol.value });
+  $('#risk-calc').textContent = risk == null ? '' : `סיכון בעסקה: $${risk.toLocaleString('en-US')}`;
   const lock = (k, on) => { const i = $(`#score input[value=${k}]`); if (on) i.checked = false; i.disabled = on; };
   lock('risk', over);
   lock('calm', !!e.mind.value && e.mind.value !== 'calm');
   lock('noadd', e.kept.value === 'no' && $$('#broken input:checked').some(i => i.value === '5'));
   $('#q-hit').hidden = !['sl', 'be', 'manual'].includes(e.exit.value);
   $('#mg-warn').replaceChildren(...[
-    over && `סיכנת $${Math.abs(risk)}, מעל המותר ($${S.risk}).`,
+    over && `פוזיציה גדולה מהמותר (${S.maxContracts} מיקרו).`,
     rr != null && Math.abs(rr) < 2 && 'יחס מתוכנן מתחת ל־1:2.',
     e.reentry.value === 'yes' && 'כניסה חוזרת לאותו רעיון: זה הרגע שבו נשברים אצלך חוקים.',
   ].filter(Boolean).map(x => el('div', { textContent: x })));
-  e.risk.setCustomValidity(isNaN(parseNum(e.risk.value)) ? 'צריך מספר, למשל 50' : '');
+  e.qty.setCustomValidity(isNaN(parseNum(e.qty.value)) ? 'צריך מספר, למשל 1' : '');
+  e.stopPts.setCustomValidity(isNaN(parseNum(e.stopPts.value)) ? 'צריך מספר, למשל 40' : '');
   e.rr.setCustomValidity(isNaN(parseNum(e.rr.value)) ? 'צריך מספר, למשל 2' : '');
   $('#score-total').textContent = scoreOf(readForm()) + ' / 100';
   $('#broken-box').hidden = e.kept.value !== 'no';
@@ -637,10 +652,10 @@ function download(name, text, type) {
   document.body.append(a); a.click(); a.remove();
 }
 function toCsv(list) {
-  const head = ['#', 'date', 'time', 'exit_time', 'symbol', 'direction', 'setup', 'risk', 'planned_rr', 'pnl', 'R', 'score', 'kept_rules',
+  const head = ['#', 'date', 'time', 'exit_time', 'symbol', 'direction', 'setup', 'contracts', 'stop_points', 'risk', 'planned_rr', 'pnl', 'R', 'score', 'kept_rules',
     'broken_rules', ...Object.keys(Q), 'notes', 'lesson'];
   const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const rows = list.map(t => { const r = rOf(t); return [numbering.get(t.id), t.date, t.time, t.exitTime, t.symbol, t.dir, t.setup, t.risk, t.rr,
+  const rows = list.map(t => { const r = rOf(t); return [numbering.get(t.id), t.date, t.time, t.exitTime, t.symbol, t.dir, t.setup, t.qty, t.stopPts, t.risk, t.rr,
     pnlOf(t).toFixed(2), r == null ? '' : r.toFixed(2), scoreOf(t), t.kept == null ? '' : t.kept ? 'yes' : 'no',
     (t.broken || []).join('; '), ...Object.keys(Q).map(k => t[k] ? qLabel(k, t[k]) : ''), t.notes, t.lesson].map(q).join(','); });
   return '﻿' + [head.join(','), ...rows].join('\r\n');
