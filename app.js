@@ -52,6 +52,7 @@ const DIR = { long: 'לונג', short: 'שורט', neutral: 'ניטרלי' };
 const MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 // Trade management questions. Each answer is optional, so old trades and quick entries still work.
 const Q = {
+  acct: ['חשבון', [['real', 'אמיתי'], ['demo', 'דמו']]],
   exit: ['איך יצאתי', [['tp', 'טייק פרופיט'], ['sl', 'סטופ'], ['be', 'ברייק איבן'], ['manual', 'יציאה ידנית']]],
   be: ['מתי העברתי לברייק איבן', [['none', 'לא העברתי'], ['early', 'לפני 1R'], ['late', 'אחרי 1R']]],
   hit: ['אחרי שיצאתי, המחיר הגיע ליעד שלי?', [['yes', 'כן'], ['no', 'לא'], ['unk', 'לא בדקתי']]],
@@ -133,6 +134,10 @@ let scEditing = null;
 let scImage = null;
 let month = localDate().slice(0, 7);
 let numbering = new Map();
+let acct = 'all';
+// Trades logged before the account field existed were all on real money.
+const acctOf = t => t.acct || 'real';
+const DEMO_TEST = 20;
 
 const curDate = () => $('#day').value || localDate();
 const dayOf = date => days.get(date) || { date };
@@ -177,7 +182,7 @@ function analyzeDay(date) {
     broken: [...broken].sort((a, b) => a - b), kept: skipped || (ts.length > 0 && !broken.size && !flagged) };
 }
 const inRange = date => month === 'all' || date.startsWith(month);
-const filtered = () => trades.filter(t => inRange(t.date)).sort(byTime);
+const filtered = () => trades.filter(t => inRange(t.date) && (acct === 'all' || acctOf(t) === acct)).sort(byTime);
 const tradingDays = () => [...new Set(trades.map(t => t.date))].sort();
 // Days that count for the process: days with trades, and days that were skipped because of the rules.
 const processDays = () => [...new Set([...tradingDays(), ...[...days.keys()].filter(d => analyzeDay(d).skipped)])].sort();
@@ -343,6 +348,7 @@ function renderTiles(list) {
   const ds = processDays().filter(inRange).map(analyzeDay);
   $('#month-title').textContent = 'דאשבורד · ' + monthName(month);
   $('#tiles').replaceChildren(...[
+    ...(acct === 'demo' ? [['מבחן הדמו', `${trades.filter(t => acctOf(t) === 'demo').length} / ${DEMO_TEST} עסקאות`]] : []),
     [month === 'all' ? 'עסקאות' : 'עסקאות החודש', String(list.length)],
     ['סה״כ עסקאות מאז ההתחלה', String(trades.length)],
     ['ניצחון / הפסד / BE', `${w} / ${l} / ${list.length - w - l}`],
@@ -497,7 +503,7 @@ function renderTable(list) {
       el('button', { className: 'link', textContent: 'מחיקה', onclick: async () => {
         if (confirm('למחוק את העסקה?')) { await store('trades', 'readwrite', s => s.delete(t.id)); await refresh(); } } }));
     body.append(el('tr', {},
-      td('#' + numbering.get(t.id), 'num muted'), td(t.date + (t.time ? ' ' + t.time : ''), 'num'), td(t.symbol, 'ltr'), td(DIR[t.dir] || ''),
+      td('#' + numbering.get(t.id), 'num muted'), td(t.date + (t.time ? ' ' + t.time : ''), 'num'), el('td', {}, el('span', { className: 'ltr', textContent: t.symbol }), ...(acctOf(t) === 'demo' ? [' ', el('span', { className: 'res demo', textContent: 'דמו' })] : [])), td(DIR[t.dir] || ''),
       el('td', {}, el('span', { className: 'res ' + resultOf(t)[0], textContent: resultOf(t)[1] })),
       td(money(p), 'num ' + cls(p)), td(r == null ? '—' : num(r) + 'R', 'num'), td(String(scoreOf(t)), 'num'),
       td(rulesLabel(t), t.kept === false ? 'warn' : t.kept === true ? 'ok' : ''),
@@ -542,6 +548,7 @@ function openForm(t) {
   e.exitTime.value = t ? t.exitTime || '' : '';
   e.lesson.value = t ? t.lesson || '' : '';
   for (const k of Object.keys(Q)) if (t && t[k]) e[k].value = t[k];
+  e.acct.value = t ? acctOf(t) : trades.length ? acctOf([...trades].sort(byTime).at(-1)) : 'real';
   e.dir.value = t ? t.dir : 'long';
   if (t) {
     const p = pnlOf(t), r = rOf(t);
@@ -674,13 +681,14 @@ function showView(name) {
 function renderMonths() {
   const ms = [...new Set([localDate().slice(0, 7), ...trades.map(t => t.date.slice(0, 7)), ...[...days.keys()].map(d => d.slice(0, 7))])]
     .sort().reverse();
+  $$('.acct-select').forEach(sel => { sel.value = acct; });
   for (const sel of $$('.month-select')) {
     sel.replaceChildren(...[...ms, 'all'].map(m => el('option', { value: m, textContent: monthName(m) })));
     sel.value = month;
   }
-  const n = trades.filter(t => inRange(t.date)).length;
+  const n = filtered().length;
   $('#month-count').textContent = month === 'all' ? `${trades.length} עסקאות סה״כ`
-    : `${n} עסקאות ב${monthName(month)} · ${trades.length} עסקאות סה״כ מאז ההתחלה`;
+    : `${n === 1 ? 'עסקה אחת' : n + ' עסקאות'} ב${monthName(month)} · ${trades.length} עסקאות סה״כ מאז ההתחלה`;
   $('#setups').replaceChildren(...[...new Set(trades.map(t => t.setup).filter(Boolean))].sort().map(s => el('option', { value: s })));
 }
 function render() {
@@ -710,6 +718,7 @@ async function init() {
   $('#broken').replaceChildren(...RULES().map((r, i) => el('label', {}, el('input', { type: 'checkbox', value: String(i + 1) }), `${i + 1}. ${r}`)));
   $$('.tabs button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   $$('.month-select').forEach(sel => sel.addEventListener('change', () => { month = sel.value; render(); }));
+  $$('.acct-select').forEach(sel => sel.addEventListener('change', () => { acct = sel.value; render(); }));
   for (const [k, [label, opts]] of Object.entries(Q)) {
     $('#q-' + k).replaceChildren(el('span', { className: 'q-label', textContent: label }),
       el('div', { className: 'seg' }, ...opts.map(([v, t]) => el('label', {}, el('input', { type: 'radio', name: k, value: v }), t))));

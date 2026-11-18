@@ -123,6 +123,7 @@
   <section id="view-journal" class="view" hidden>
     <div class="filters">
       <label>חודש <select class="month-select" id="m-journal"></select></label>
+      <label>חשבון <select class="acct-select"><option value="all">הכול</option><option value="real">אמיתי</option><option value="demo">דמו</option></select></label>
       <span id="month-count" class="muted"></span>
     </div>
     <div class="card table-wrap">
@@ -140,7 +141,10 @@
   <section id="view-summary" class="view" hidden>
     <div class="monthbar">
       <h2 id="month-title">דאשבורד</h2>
-      <label>חודש <select class="month-select" id="m-summary"></select></label>
+      <div class="row">
+        <label>חודש <select class="month-select" id="m-summary"></select></label>
+        <label>חשבון <select class="acct-select"><option value="all">הכול</option><option value="real">אמיתי</option><option value="demo">דמו</option></select></label>
+      </div>
     </div>
     <div class="tiles" id="tiles"></div>
     <div class="card"><h2>איפה הכסף הולך</h2><div id="leaks"></div></div>
@@ -188,6 +192,7 @@
   <form id="form" method="dialog">
     <h2 id="dlg-title">עסקה חדשה</h2>
     <fieldset><legend>העסקה</legend>
+      <div class="q" id="q-acct"></div>
       <div class="fgrid">
         <label>תאריך <input type="date" name="date" required></label>
         <label>שעה <input type="time" name="time"></label>
@@ -256,6 +261,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
