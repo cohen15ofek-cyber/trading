@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>יומן מסחר – משמעת ועקביות</title>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <header class="top">
   <h1>יומן מסחר</h1>
   <nav class="tabs" role="tablist">
     <button role="tab" data-view="pre" aria-selected="true">Pre-market</button>
+    <button role="tab" data-view="analyses" aria-selected="false">הניתוחים שלי</button>
     <button role="tab" data-view="rules" aria-selected="false">החוקים שלי</button>
     <button role="tab" data-view="journal" aria-selected="false">יומן</button>
     <button role="tab" data-view="summary" aria-selected="false">סיכום</button>
@@ -55,6 +56,33 @@
       </div>
     </div>
     <div id="sc-list" class="scenarios"></div>
+    <div class="card" id="review-card">
+      <h2>אחרי הסשן: מה קרה בפועל?</h2>
+      <div class="q"><span class="q-label">הביאס צדק?</span>
+        <div class="seg" id="bias-result">
+          <button type="button" data-v="yes">כן</button>
+          <button type="button" data-v="partial">חלקית</button>
+          <button type="button" data-v="no">לא</button>
+        </div>
+      </div>
+      <p class="muted hint">ליד כל תרחיש למעלה אפשר לסמן אם הוא קרה.</p>
+      <label>מה המחיר עשה, ומה פספסתי בניתוח? <textarea id="review-text" rows="3" placeholder="למשל: המחיר לקח את הנזילות למטה ולא חזר. פספסתי שה־15 דקות היה במגמת ירידה."></textarea></label>
+      <div class="row">
+        <label class="btn">תמונה של סוף היום <input type="file" id="rv-img" accept="image/*" hidden></label>
+        <span class="muted hint">או לגרור תמונה לכאן / להדביק (Ctrl+V)</span>
+      </div>
+      <div id="rv-preview" class="thumbs"></div>
+    </div>
+  </section>
+
+  <!-- Analyses: the pre-market of every day, for the weekly review -->
+  <section id="view-analyses" class="view" hidden>
+    <div class="filters">
+      <label>חודש <select class="month-select" id="m-analyses"></select></label>
+      <span id="an-count" class="muted"></span>
+    </div>
+    <div class="tiles" id="an-tiles"></div>
+    <div id="an-list"></div>
   </section>
 
   <!-- 2. Rules -->
@@ -271,6 +299,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

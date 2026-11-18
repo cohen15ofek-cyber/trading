@@ -161,3 +161,17 @@ details.more summary { cursor: pointer; color: var(--text2); font-size: 14px; }
 td.random { color: #8a5a00; font-weight: 600; }
 fieldset .hint { margin: 0; font-size: 12px; }
 #q-mind .q-label { display: none; }
+.scenario .played { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.scenario .played .seg button, .seg.small button { padding: 3px 10px; font-size: 12px; }
+.week-head { font-size: 15px; color: var(--accent-d); margin: 20px 0 10px; }
+.an-day { gap: 8px; }
+.an-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.an-head .link { margin-inline-start: auto; }
+.an-text, .an-review, .an-trades { margin: 0; white-space: pre-wrap; }
+.an-trades { font-size: 14px; color: var(--text2); border-top: 1px solid var(--grid); padding-top: 8px; }
+.an-scs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.an-sc { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.an-sc img { width: 100%; max-height: 170px; object-fit: cover; cursor: zoom-in; display: block; border-bottom: 1px solid var(--border); }
+.an-sc-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.an-sc-body p { margin: 0; font-size: 14px; white-space: pre-wrap; }
+.an-sc-body .row { gap: 6px; }
