@@ -259,6 +259,8 @@ function renderRules() {
   v.className = 'verdict ' + g.status;
   v.replaceChildren(text[0], el('small', { textContent: text[1] }),
     ...(g.moodLow ? [el('small', { textContent: 'שים לב: מצב רגשי מתחת ל־6. ככה מתחילים הימים שבהם נשברים חוקים.' })] : []));
+  const gaveIn = trades.filter(t => t.date === date && t.reentry === 'yes').length;
+  $('#urge-count').textContent = `היום: עמדתי בדחף ${day.urgeHeld || 0} פעמים · נכנסתי שוב ${gaveIn} פעמים`;
   $('#d-tiles').replaceChildren(...[
     ['עסקאות', `${a.n} / 3`], ['ניצחונות', `${a.wins} / 1`], ['הפסדים', `${a.losses} / 2`], ['BE', `${a.bes} / 2`],
     ['רווח/הפסד', money(a.pnl), cls(a.pnl)], ['ציון ממוצע', a.score == null ? '—' : a.score.toFixed(0)],
@@ -367,6 +369,8 @@ function renderLeaks(list) {
   box.replaceChildren(kv([
     row('עסקאות ששברו חוק', list.filter(t => t.kept === false)),
     row('כניסה חוזרת אחרי סטופ או BE', list.filter(t => t.reentry === 'yes')),
+    ['דחף לכניסה חוזרת: עמדתי בו / נכנסתי', `${[...days.values()].filter(d => inRange(d.date)).reduce((s, d) => s + (d.urgeHeld || 0), 0)}`
+      + ` / ${list.filter(t => t.reentry === 'yes').length}`],
     row('עסקאות נגד המבנה של 15 דקות', list.filter(t => t.struct === 'against')),
     row('כניסה מתוך "אני בטוח" / FOMO / נקמה / פחד', list.filter(t => t.mind && t.mind !== 'calm')),
     [`פוזיציה גדולה מ־${S.maxContracts} מיקרו`, String(overRisk.length), overRisk.length ? 'warn' : ''],
@@ -736,6 +740,8 @@ async function init() {
   $('#mood').addEventListener('change', e => saveDay(curDate(),
     { mood: e.target.value === '' ? null : Math.max(1, Math.min(10, Math.round(Number(e.target.value)))) }));
   $('#feeling').addEventListener('change', e => saveDay(curDate(), { feeling: e.target.value.trim() }));
+  $('#urge-held').onclick = () => saveDay(curDate(), { urgeHeld: (dayOf(curDate()).urgeHeld || 0) + 1 });
+  $('#urge-undo').onclick = () => saveDay(curDate(), { urgeHeld: Math.max(0, (dayOf(curDate()).urgeHeld || 0) - 1) });
   for (const k of Object.keys(DEFAULTS)) {
     const input = $('#s-' + k);
     input.value = S[k];

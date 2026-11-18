@@ -73,6 +73,22 @@
           <label>כמה מילים <textarea id="feeling" rows="3" placeholder="ישנתי? אכלתי? מה עובר לי בראש?"></textarea></label>
         </div>
         <div class="card">
+          <h2>דחף לכניסה חוזרת</h2>
+          <p class="quote">הסטופ שלי הוא מידע, לא הזמנה.</p>
+          <ol class="plain">
+            <li>אומר את המשפט בקול.</li>
+            <li>ידיים מהעכבר, קם, טיימר של 15 דקות.</li>
+            <li>כותב על דף מה אני רואה, ולמה אני בטוח שזה עכשיו ילך.</li>
+            <li>מסתכל מהצד. אם זה הלך ליעד, זה פספוס שעמדתי בו.</li>
+            <li>חוזר רק לסטאפ מלא וחדש, עם המבנה ומהתרחישים. אחרת היום נגמר.</li>
+          </ol>
+          <div class="row">
+            <button type="button" id="urge-held" class="primary">עמדתי בדחף (+1)</button>
+            <button type="button" id="urge-undo" class="ghost">ביטול אחרון</button>
+          </div>
+          <div id="urge-count" class="calc"></div>
+        </div>
+        <div class="card">
           <h2>מצב היום</h2>
           <div class="tiles small" id="d-tiles"></div>
         </div>
@@ -240,6 +256,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
