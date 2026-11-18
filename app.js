@@ -61,6 +61,16 @@ const Q = {
   mind: ['מה עבר לי בראש בכניסה', [['calm', 'רגוע, לפי התוכנית'], ['sure', '"אני בטוח"'], ['fomo', 'FOMO'],
     ['revenge', 'להחזיר הפסד'], ['fear', 'פחד / היסוס']]],
 };
+// What kind of trade it was. "Random" keeps the rules but wasn't planned.
+const KIND = { plan: 'עסקת תוכנית', random: 'עסקה סתם', broke: 'שברתי חוק' };
+const kindOf = t => t.kind || (t.kept === false ? 'broke' : t.kept === true ? 'kept' : '');
+const kindLabel = t => KIND[kindOf(t)] || (kindOf(t) === 'kept' ? 'עמדתי בחוקים (לפני הסיווג)' : 'לא סווג');
+const RANDOM_WHY = [['notStrategy', 'לא סטאפ מהאסטרטגיה'], ['notScenario', 'לא היה בתרחישים'], ['emotion', 'נכנסתי מהרגש']];
+const MISTAKES = [['earlyBE', 'BE לפני 1R'], ['stopBack', 'הזזתי סטופ אחורה'], ['manual', 'יצאתי ידנית לפני הזמן'],
+  ['reentry', 'כניסה חוזרת אחרי סטופ/BE'], ['against', 'נגד המבנה של 15 דקות']];
+// Old trades kept the same facts in separate fields.
+const mistakesOf = t => t.mistakes || [t.be === 'early' && 'earlyBE', t.exit === 'manual' && 'manual',
+  t.reentry === 'yes' && 'reentry', t.struct === 'against' && 'against'].filter(Boolean);
 const qLabel = (k, v) => (Q[k][1].find(o => o[0] === v) || [, ''])[1];
 const monthName = m => m === 'all' ? 'כל הזמן' : `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
 
@@ -356,7 +366,7 @@ function renderTiles(list) {
     ['אחוז הצלחה (בלי BE)', w + l ? (w / (w + l) * 100).toFixed(0) + '%' : '—'],
     ['R ממוצע', rs.length ? num(avg(rs)) + 'R' : '—'],
     ['ימים שעמדתי בחוקים', ds.length ? keptText(ds) : '—'],
-    ['עסקאות שעמדו בחוקים', list.length ? `${list.filter(t => t.kept !== false).length} / ${list.length}` : '—'],
+    ['עסקאות מהתוכנית', list.length ? `${list.filter(t => t.kind === 'plan').length} / ${list.length}` : '—'],
     ['ציון ממוצע', sc == null ? '—' : sc.toFixed(0)],
   ].map(tile));
 }
@@ -369,11 +379,14 @@ function renderLeaks(list) {
   const missed = list.filter(t => t.hit === 'yes' && pnlOf(t) <= 0);
   const overRisk = list.filter(overSize);
   const risks = list.map(t => t.risk).filter(x => x != null);
-  const undocumented = list.filter(t => !t.exit || !t.mind || !t.struct || t.stopPts == null);
+  const undocumented = list.filter(t => !t.kind || !t.mind || t.stopPts == null);
   const box = $('#leaks');
   if (!list.length) { box.replaceChildren(el('p', { className: 'muted', textContent: 'אין עסקאות בתקופה הזו.' })); return; }
   box.replaceChildren(kv([
     row('עסקאות ששברו חוק', list.filter(t => t.kept === false)),
+    row('עסקאות סתם (בגבולות החוקים, בלי תוכנית)', list.filter(t => t.kind === 'random')),
+    row('הזזת סטופ אחורה', list.filter(t => mistakesOf(t).includes('stopBack'))),
+    row('יציאה ידנית לפני הזמן', list.filter(t => mistakesOf(t).includes('manual'))),
     row('כניסה חוזרת אחרי סטופ או BE', list.filter(t => t.reentry === 'yes')),
     ['דחף לכניסה חוזרת: עמדתי בו / נכנסתי', `${[...days.values()].filter(d => inRange(d.date)).reduce((s, d) => s + (d.urgeHeld || 0), 0)}`
       + ` / ${list.filter(t => t.reentry === 'yes').length}`],
@@ -489,7 +502,8 @@ function renderBars(sel, list, keysOf, order) {
 }
 
 /* ---------- journal ---------- */
-const rulesLabel = t => t.kept === false ? '✗ ' + ((t.broken || []).length ? 'חוק ' + t.broken.join(', ') : 'נשבר חוק') : t.kept === true ? '✓ עמדתי' : '—';
+const rulesLabel = t => t.kept === false ? '✗ ' + ((t.broken || []).length ? 'חוק ' + t.broken.join(', ') : 'נשבר חוק')
+  : t.kind === 'random' ? '~ סתם' : t.kind === 'plan' ? '✓ תוכנית' : t.kept === true ? '✓ עמדתי' : '—';
 function renderTable(list) {
   const body = $('#trades-table tbody');
   body.replaceChildren();
@@ -506,13 +520,16 @@ function renderTable(list) {
       td('#' + numbering.get(t.id), 'num muted'), td(t.date + (t.time ? ' ' + t.time : ''), 'num'), el('td', {}, el('span', { className: 'ltr', textContent: t.symbol }), ...(acctOf(t) === 'demo' ? [' ', el('span', { className: 'res demo', textContent: 'דמו' })] : [])), td(DIR[t.dir] || ''),
       el('td', {}, el('span', { className: 'res ' + resultOf(t)[0], textContent: resultOf(t)[1] })),
       td(money(p), 'num ' + cls(p)), td(r == null ? '—' : num(r) + 'R', 'num'), td(String(scoreOf(t)), 'num'),
-      td(rulesLabel(t), t.kept === false ? 'warn' : t.kept === true ? 'ok' : ''),
+      td(rulesLabel(t), t.kept === false ? 'warn' : t.kind === 'random' ? 'random' : t.kept === true ? 'ok' : ''),
       el('td', { className: 'pic' }, ...(t.images && t.images.length ? [el('img', { src: t.images[0], alt: 'תמונת העסקה', title: 'לחץ להגדלה',
         onclick: () => view(t.images[0]) }), ...(t.images.length > 1 ? [el('span', { className: 'muted', textContent: ' +' + (t.images.length - 1) })] : [])] : ['—'])),
       actions));
     if (openDetail === t.id) {
       const cell = el('td', { colSpan: 11 });
       const line = (k, v) => v ? cell.append(el('p', {}, el('b', { textContent: k + ': ' }), v)) : null;
+      line('סוג העסקה', kindOf(t) ? kindLabel(t) + ((t.randomWhy || []).length
+        ? ' · ' + t.randomWhy.map(w => (RANDOM_WHY.find(o => o[0] === w) || [, w])[1]).join(', ') : '') : '');
+      line('טעויות בניהול', mistakesOf(t).map(m => (MISTAKES.find(o => o[0] === m) || [, m])[1]).join(' · '));
       line('ניהול העסקה', [t.setup && 'סטאפ: ' + t.setup, t.qty != null && `${t.qty} חוזים`, t.stopPts != null && `סטופ ${t.stopPts} נק׳`, t.risk != null && 'סיכון: $' + t.risk, t.rr != null && 'יחס: 1:' + t.rr,
         t.exitTime && 'יציאה ב־' + t.exitTime, ...Object.keys(Q).filter(k => t[k]).map(k => `${Q[k][0]}: ${qLabel(k, t[k])}`)]
         .filter(Boolean).join(' · '));
@@ -536,30 +553,37 @@ function openForm(t) {
   const f = $('#form'); f.reset();
   $('#dlg-title').textContent = t ? 'עריכת עסקה' : 'עסקה חדשה';
   const e = f.elements;
+  const last = trades.length ? [...trades].sort(byTime).at(-1) : null;
   e.date.value = t ? t.date : curDate();
   e.time.value = t ? t.time || '' : new Date().toTimeString().slice(0, 5);
-  const lastSymbol = trades.length ? [...trades].sort(byTime).at(-1).symbol : 'MNQ';
-  const sym = t ? t.symbol : lastSymbol;
+  // Account and size carry over from the last trade; new trades are MNQ (one micro is the plan).
+  const sym = t ? t.symbol : 'MNQ';
   e.symbol.value = [...e.symbol.options].some(o => o.value === sym) ? sym : 'MNQ';
-  e.setup.value = t ? t.setup || '' : '';
-  e.qty.value = t && t.qty != null ? t.qty : 1;
+  e.acct.value = t ? acctOf(t) : last ? acctOf(last) : 'real';
+  e.qty.value = t ? t.qty ?? '' : last && last.qty != null ? last.qty : 1;
   e.stopPts.value = t && t.stopPts != null ? t.stopPts : '';
+  e.dir.value = t ? t.dir : 'long';
+  e.setup.value = t ? t.setup || '' : '';
   e.rr.value = t && t.rr != null ? t.rr : '';
   e.exitTime.value = t ? t.exitTime || '' : '';
   e.lesson.value = t ? t.lesson || '' : '';
-  for (const k of Object.keys(Q)) if (t && t[k]) e[k].value = t[k];
-  e.acct.value = t ? acctOf(t) : trades.length ? acctOf([...trades].sort(byTime).at(-1)) : 'real';
-  e.dir.value = t ? t.dir : 'long';
+  e.notes.value = t ? t.notes || '' : '';
   if (t) {
     const p = pnlOf(t), r = rOf(t);
     e.res.value = p > 0 ? 'win' : p < 0 ? 'loss' : 'be';
     e.amount.value = Math.abs(p);
     e.r.value = r == null ? '' : Math.abs(r);
-    e.notes.value = t.notes || '';
-    if (t.kept != null) e.kept.value = t.kept ? 'yes' : 'no';
+    const k = kindOf(t);
+    if (KIND[k]) e.kind.value = k;
+    if (t.mind) e.mind.value = t.mind;
+    if (t.hit) e.hit.value = t.hit;
   }
-  $$('#score input').forEach(i => { i.checked = !!(t && t.score && t.score[i.value]); });
+  const ms = t ? mistakesOf(t) : [];
+  $$('#mistakes input').forEach(i => { i.checked = ms.includes(i.value); });
+  $$('#random-why input').forEach(i => { i.checked = !!(t && (t.randomWhy || []).includes(i.value)); });
   $$('#broken input').forEach(i => { i.checked = !!(t && (t.broken || []).includes(Number(i.value))); });
+  e.mind[0].required = true;
+  $('.more').open = !!(t && (t.setup || t.rr != null || t.exitTime || t.lesson));
   images = [...((t && t.images) || [])];
   renderThumbs(); updateForm();
   $('#dlg').showModal();
@@ -568,56 +592,75 @@ function openForm(t) {
 const riskOf = e => { const q = okNum(e.qty.value), s = okNum(e.stopPts.value);
   return q == null || s == null ? null : Math.abs(q) * Math.abs(s) * (POINT_VALUE[e.symbol.value] || 2); };
 const okNum = s => { const v = parseNum(s); return v == null || isNaN(v) ? null : v; };
+const checked = sel => $$(sel + ' input:checked').map(i => i.value);
+// The score follows from the answers, so it can't be filled in generously.
+function scoreFrom(t) {
+  const ms = t.mistakes || [];
+  return {
+    setup: t.kind !== 'random',
+    risk: t.stopPts != null && !overSize(t),
+    stop: !ms.includes('stopBack'),
+    noadd: !(t.broken || []).includes(5),
+    calm: t.mind === 'calm',
+    exit: !ms.includes('earlyBE') && !ms.includes('manual'),
+  };
+}
 function readForm() {
   const e = $('#form').elements;
   const sign = e.res.value === 'loss' ? -1 : e.res.value === 'be' ? 0 : 1;
-  const kept = e.kept.value === 'yes' ? true : e.kept.value === 'no' ? false : null;
-  return {
-    id: editing ? editing.id : uid(),
-    date: e.date.value, time: e.time.value, symbol: e.symbol.value, dir: e.dir.value,
-    pnl: sign * Math.abs(parseNum(e.amount.value) || 0),
-    r: parseNum(e.r.value) == null || isNaN(parseNum(e.r.value)) ? null : sign * Math.abs(parseNum(e.r.value)),
-    score: Object.fromEntries($$('#score input').map(i => [i.value, i.checked])),
-    kept, broken: kept === false ? $$('#broken input:checked').map(i => Number(i.value)) : [],
-    notes: e.notes.value.trim(), images, rv: RULES_VERSION,
-    setup: e.setup.value.trim(), exitTime: e.exitTime.value, lesson: e.lesson.value.trim(),
+  const kind = e.kind.value || null;
+  const mistakes = checked('#mistakes');
+  const pnl = sign * Math.abs(parseNum(e.amount.value) || 0);
+  const risk = riskOf(e) ?? (editing && editing.stopPts == null ? editing.risk ?? null : null);
+  // R typed by hand wins; otherwise it is the result divided by the dollars at risk.
+  const rTyped = okNum(e.r.value);
+  const r = rTyped != null ? sign * Math.abs(rTyped) : risk ? Math.round(pnl / risk * 100) / 100 : null;
+  const t = {
+    id: editing ? editing.id : uid(), rv: RULES_VERSION,
+    date: e.date.value, time: e.time.value, symbol: e.symbol.value, dir: e.dir.value, acct: e.acct.value || 'real',
     qty: okNum(e.qty.value) == null ? null : Math.abs(okNum(e.qty.value)),
     stopPts: okNum(e.stopPts.value) == null ? null : Math.abs(okNum(e.stopPts.value)),
-    risk: riskOf(e) ?? (editing && editing.stopPts == null ? editing.risk ?? null : null),
+    risk, pnl, r, kind, kept: kind == null ? null : kind !== 'broke',
+    broken: kind === 'broke' ? checked('#broken').map(Number) : [],
+    randomWhy: kind === 'random' ? checked('#random-why') : [],
+    mind: e.mind.value || null, mistakes, hit: $('#q-hit').hidden ? null : e.hit.value || null,
+    notes: e.notes.value.trim(), images,
+    setup: e.setup.value.trim(), exitTime: e.exitTime.value, lesson: e.lesson.value.trim(),
     rr: okNum(e.rr.value) == null ? null : Math.abs(okNum(e.rr.value)),
-    ...Object.fromEntries(Object.keys(Q).map(k => [k, k === 'hit' && $('#q-hit').hidden ? null : e[k].value || null])),
     oldBroken: editing ? editing.oldBroken || [] : [],
+    // The same facts in the fields the dashboard already reads.
+    reentry: mistakes.includes('reentry') ? 'yes' : 'no', struct: mistakes.includes('against') ? 'against' : 'with',
+    be: mistakes.includes('earlyBE') ? 'early' : null,
+    exit: mistakes.includes('manual') ? 'manual' : sign > 0 ? 'tp' : sign < 0 ? 'sl' : 'be',
   };
+  t.score = scoreFrom(t);
+  return t;
 }
 function updateForm() {
   const e = $('#form').elements;
-  // Answers that contradict a score box clear it, so a trade can't score 100 on paper.
-  const rr = okNum(e.rr.value), risk = riskOf(e);
-  const qty = okNum(e.qty.value);
+  // Typing a minus sign (e.g. -1R or -50) marks the trade as a loss on its own.
+  if (parseNum(e.amount.value) < 0 || parseNum(e.r.value) < 0) e.res.value = 'loss';
+  const isBE = e.res.value === 'be';
+  e.amount.required = !isBE;
+  if (isBE) { e.amount.value = 0; e.r.value = 0; }
+  const risk = riskOf(e), qty = okNum(e.qty.value), rr = okNum(e.rr.value);
   const over = overSize({ qty: qty == null ? null : Math.abs(qty), symbol: e.symbol.value });
   $('#risk-calc').textContent = risk == null ? '' : `סיכון בעסקה: $${risk.toLocaleString('en-US')}`;
-  const lock = (k, on) => { const i = $(`#score input[value=${k}]`); if (on) i.checked = false; i.disabled = on; };
-  lock('risk', over);
-  lock('calm', !!e.mind.value && e.mind.value !== 'calm');
-  lock('noadd', e.kept.value === 'no' && $$('#broken input:checked').some(i => i.value === '5'));
-  $('#q-hit').hidden = !['sl', 'be', 'manual'].includes(e.exit.value);
+  $('#random-box').hidden = e.kind.value !== 'random';
+  $('#broken-box').hidden = e.kind.value !== 'broke';
+  const ms = checked('#mistakes');
+  // Only worth asking when the trade didn't reach the target.
+  $('#q-hit').hidden = e.res.value === 'win' && !ms.includes('earlyBE') && !ms.includes('manual');
   $('#mg-warn').replaceChildren(...[
     over && `פוזיציה גדולה מהמותר (${S.maxContracts} מיקרו).`,
     rr != null && Math.abs(rr) < 2 && 'יחס מתוכנן מתחת ל־1:2.',
-    e.reentry.value === 'yes' && 'כניסה חוזרת לאותו רעיון: זה הרגע שבו נשברים אצלך חוקים.',
+    ms.includes('reentry') && 'כניסה חוזרת לאותו רעיון: זה הרגע שבו נשברים אצלך חוקים.',
   ].filter(Boolean).map(x => el('div', { textContent: x })));
-  e.qty.setCustomValidity(isNaN(parseNum(e.qty.value)) ? 'צריך מספר, למשל 1' : '');
-  e.stopPts.setCustomValidity(isNaN(parseNum(e.stopPts.value)) ? 'צריך מספר, למשל 40' : '');
-  e.rr.setCustomValidity(isNaN(parseNum(e.rr.value)) ? 'צריך מספר, למשל 2' : '');
-  $('#score-total').textContent = scoreOf(readForm()) + ' / 100';
-  $('#broken-box').hidden = e.kept.value !== 'no';
-  // Typing a minus sign (e.g. -1R or -50) marks the trade as a loss on its own.
-  if (parseNum(e.amount.value) < 0 || parseNum(e.r.value) < 0) e.res.value = 'loss';
-  e.amount.setCustomValidity(isNaN(parseNum(e.amount.value)) ? 'צריך מספר, למשל 103 או ‎-103' : '');
-  e.r.setCustomValidity(isNaN(parseNum(e.r.value)) ? 'צריך מספר, למשל 2 או ‎-1' : '');
-  const be = e.res.value === 'be';
-  e.amount.required = !be;
-  if (be) { e.amount.value = 0; e.r.value = 0; }
+  for (const [n, eg] of [['qty', '1'], ['stopPts', '40'], ['rr', '2'], ['amount', '103 או ‎-103'], ['r', '2 או ‎-1']])
+    e[n].setCustomValidity(isNaN(parseNum(e[n].value)) ? 'צריך מספר, למשל ' + eg : '');
+  const t = readForm(), lost = SCORE.filter(([k]) => !t.score[k]);
+  $('#score-line').replaceChildren('ציון העסקה: ', el('b', { className: 'num', textContent: scoreOf(t) + ' / 100' }),
+    ...(lost.length ? [el('span', { className: 'muted', textContent: ' · ירד על: ' + lost.map(([, l, p]) => `${l} (−${p})`).join(', ') })] : []));
 }
 function renderThumbs() {
   $('#thumbs').replaceChildren(...images.map((src, i) => {
@@ -664,11 +707,11 @@ function download(name, text, type) {
 }
 function toCsv(list) {
   const head = ['#', 'date', 'time', 'exit_time', 'symbol', 'direction', 'setup', 'contracts', 'stop_points', 'risk', 'planned_rr', 'pnl', 'R', 'score', 'kept_rules',
-    'broken_rules', ...Object.keys(Q), 'notes', 'lesson'];
+    'broken_rules', 'kind', 'random_why', 'mistakes', ...Object.keys(Q), 'notes', 'lesson'];
   const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const rows = list.map(t => { const r = rOf(t); return [numbering.get(t.id), t.date, t.time, t.exitTime, t.symbol, t.dir, t.setup, t.qty, t.stopPts, t.risk, t.rr,
     pnlOf(t).toFixed(2), r == null ? '' : r.toFixed(2), scoreOf(t), t.kept == null ? '' : t.kept ? 'yes' : 'no',
-    (t.broken || []).join('; '), ...Object.keys(Q).map(k => t[k] ? qLabel(k, t[k]) : ''), t.notes, t.lesson].map(q).join(','); });
+    (t.broken || []).join('; '), kindOf(t) ? kindLabel(t) : '', (t.randomWhy || []).join('; '), mistakesOf(t).join('; '), ...Object.keys(Q).map(k => t[k] ? qLabel(k, t[k]) : ''), t.notes, t.lesson].map(q).join(','); });
   return '﻿' + [head.join(','), ...rows].join('\r\n');
 }
 
@@ -695,7 +738,7 @@ function render() {
   const list = filtered();
   renderMonths(); renderPre(); renderRules(); renderTable(list);
   renderTiles(list); renderLeaks(list); renderPhase(); renderWeek(); renderScores(); renderEquity(list); renderDays();
-  renderBars('#by-kept', list, t => [t.kept === false ? 'שברתי חוק' : 'עמדתי בחוקים'], ['עמדתי בחוקים', 'שברתי חוק']);
+  renderBars('#by-kept', list, t => [kindLabel(t)], [...Object.values(KIND), 'עמדתי בחוקים (לפני הסיווג)', 'לא סווג']);
   renderBars('#by-rule', list.filter(t => t.kept === false), t => (t.broken || []).length ? t.broken.map(b => 'חוק ' + b) : ['לא צוין']);
   renderBars('#by-dir', list, t => [DIR[t.dir] || '—'], ['לונג', 'שורט', 'ניטרלי']);
   renderBars('#by-mind', list.filter(t => t.mind), t => [qLabel('mind', t.mind)], Q.mind[1].map(o => o[1]));
@@ -713,13 +756,15 @@ async function refresh() {
 
 async function init() {
   db = await openDb();
-  $('#score').replaceChildren(...SCORE.map(([k, l, p]) => el('label', {}, el('input', { type: 'checkbox', value: k }), l,
-    el('span', { className: 'pts num', textContent: String(p) }))));
+  const chips = (sel, opts) => $(sel).replaceChildren(...opts.map(([v, t]) => el('label', {}, el('input', { type: 'checkbox', value: v }), t)));
+  chips('#mistakes', MISTAKES);
+  chips('#random-why', RANDOM_WHY);
   $('#broken').replaceChildren(...RULES().map((r, i) => el('label', {}, el('input', { type: 'checkbox', value: String(i + 1) }), `${i + 1}. ${r}`)));
   $$('.tabs button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   $$('.month-select').forEach(sel => sel.addEventListener('change', () => { month = sel.value; render(); }));
   $$('.acct-select').forEach(sel => sel.addEventListener('change', () => { acct = sel.value; render(); }));
   for (const [k, [label, opts]] of Object.entries(Q)) {
+    if (!$('#q-' + k)) continue;
     $('#q-' + k).replaceChildren(el('span', { className: 'q-label', textContent: label }),
       el('div', { className: 'seg' }, ...opts.map(([v, t]) => el('label', {}, el('input', { type: 'radio', name: k, value: v }), t))));
   }

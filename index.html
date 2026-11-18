@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>יומן מסחר – משמעת ועקביות</title>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <header class="top">
@@ -161,7 +161,7 @@
       <div id="equity" class="chart"></div>
     </div>
     <div class="grid2">
-      <div class="card"><h2>רווח/הפסד: עמדתי בחוקים מול שברתי חוק</h2><div id="by-kept"></div></div>
+      <div class="card"><h2>רווח/הפסד לפי סוג העסקה</h2><div id="by-kept"></div></div>
       <div class="card"><h2>כמה עלה לי כל חוק שנשבר</h2><div id="by-rule"></div></div>
       <div class="card"><h2>רווח/הפסד: לונג מול שורט</h2><div id="by-dir"></div></div>
       <div class="card"><h2>רווח/הפסד לפי מה שעבר לי בראש</h2><div id="by-mind"></div></div>
@@ -191,67 +191,77 @@
 <dialog id="dlg">
   <form id="form" method="dialog">
     <h2 id="dlg-title">עסקה חדשה</h2>
-    <fieldset><legend>העסקה</legend>
+    <fieldset><legend>1. העסקה</legend>
       <div class="q" id="q-acct"></div>
       <div class="fgrid">
         <label>תאריך <input type="date" name="date" required></label>
         <label>שעה <input type="time" name="time"></label>
         <label>מדד
-          <select name="symbol"><option>NQ</option><option>MNQ</option><option>ES</option><option>MES</option></select>
+          <select name="symbol"><option>MNQ</option><option>NQ</option><option>MES</option><option>ES</option></select>
         </label>
         <label>כיוון
           <select name="dir"><option value="long">לונג</option><option value="short">שורט</option></select>
         </label>
+        <label>חוזים <input type="text" name="qty" dir="ltr" inputmode="numeric" autocomplete="off" required></label>
+        <label>סטופ (נקודות) <input type="text" name="stopPts" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="40" required></label>
         <label>תוצאה
           <select name="res"><option value="win">רווח</option><option value="loss">הפסד</option><option value="be">ברייק־איבן</option></select>
         </label>
         <label>סכום ($) <input type="text" name="amount" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="103 או ‎-103" required></label>
-        <label>כמה R <input type="text" name="r" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="2 או ‎-1"></label>
-      </div>
-    </fieldset>
-    <fieldset><legend>ניהול העסקה</legend>
-      <div class="fgrid">
-        <label>סטאפ <input name="setup" list="setups" autocomplete="off" placeholder="למשל: FVG שעתי + SMT"></label>
-        <label>חוזים <input type="text" name="qty" dir="ltr" inputmode="numeric" autocomplete="off"></label>
-        <label>סטופ (נקודות) <input type="text" name="stopPts" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="40"></label>
-        <label>יחס מתוכנן (1:X) <input type="text" name="rr" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="2"></label>
-        <label>שעת יציאה <input type="time" name="exitTime"></label>
+        <label>כמה R <input type="text" name="r" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="מחושב לבד"></label>
       </div>
       <div id="risk-calc" class="calc"></div>
-      <datalist id="setups"></datalist>
-      <div class="q" id="q-struct"></div>
-      <div class="q" id="q-mind"></div>
-      <div class="q" id="q-reentry"></div>
-      <div class="q" id="q-be"></div>
-      <div class="q" id="q-exit"></div>
-      <div class="q" id="q-hit" hidden></div>
-      <div id="mg-warn" class="warn mg-warn"></div>
     </fieldset>
-    <fieldset><legend>ציון 100/100</legend>
-      <div id="score" class="checklist"></div>
-      <div class="calc">ציון העסקה: <b id="score-total" class="num">0 / 100</b></div>
-    </fieldset>
-    <fieldset><legend>עמדתי בחוקים?</legend>
-      <div class="seg" id="kept">
-        <label><input type="radio" name="kept" value="yes" required> כן, עמדתי</label>
-        <label><input type="radio" name="kept" value="no"> לא, נשבר חוק</label>
+
+    <fieldset><legend>2. איזו עסקה זו?</legend>
+      <div class="seg kind">
+        <label><input type="radio" name="kind" value="plan" required> ✓ עסקה מהתוכנית</label>
+        <label><input type="radio" name="kind" value="random"> עסקה סתם</label>
+        <label><input type="radio" name="kind" value="broke"> ✗ שברתי חוק</label>
+      </div>
+      <p class="muted hint">מהתוכנית = סטאפ מהאסטרטגיה, שהיה בתרחישים של הבוקר, ונכנסתי אליו רגוע.
+        סתם = עמדתי בחוקים, אבל לא תכננתי את העסקה הזו.</p>
+      <div id="random-box" hidden>
+        <h3>מה היה חסר?</h3>
+        <div class="seg" id="random-why"></div>
       </div>
       <div id="broken-box" hidden>
         <h3>איזה חוק נשבר?</h3>
         <div id="broken" class="checklist"></div>
       </div>
     </fieldset>
-    <fieldset><legend>מה הרגשתי</legend>
-      <textarea name="notes" rows="3" placeholder="כמה מילים: מה הרגשתי, מה עבר לי בראש"></textarea>
-      <label>מה אעשה אחרת בפעם הבאה <textarea name="lesson" rows="2"></textarea></label>
+
+    <fieldset><legend>3. מה עבר לי בראש בכניסה</legend>
+      <div class="q" id="q-mind"></div>
     </fieldset>
-    <fieldset><legend>תמונה של העסקה</legend>
+
+    <fieldset><legend>4. טעויות בניהול <span class="muted">(רק אם היו)</span></legend>
+      <div class="seg" id="mistakes"></div>
+      <div class="q" id="q-hit" hidden></div>
+      <div id="mg-warn" class="warn mg-warn"></div>
+    </fieldset>
+
+    <fieldset><legend>5. תמונה והערה</legend>
       <div class="row">
         <label class="btn">צירוף תמונה <input type="file" id="in-img" accept="image/*" multiple hidden></label>
         <span class="muted hint">או לגרור תמונה לכאן / להדביק (Ctrl+V)</span>
       </div>
       <div id="thumbs" class="thumbs"></div>
+      <textarea name="notes" rows="2" placeholder="משפט אחד: מה הרגשתי, מה עבר לי בראש"></textarea>
     </fieldset>
+
+    <details class="more">
+      <summary>פרטים נוספים (לא חובה)</summary>
+      <div class="fgrid">
+        <label>סטאפ <input name="setup" list="setups" autocomplete="off" placeholder="למשל: FVG שעתי + SMT"></label>
+        <label>יחס מתוכנן (1:X) <input type="text" name="rr" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="2"></label>
+        <label>שעת יציאה <input type="time" name="exitTime"></label>
+      </div>
+      <datalist id="setups"></datalist>
+      <label>מה אעשה אחרת בפעם הבאה <textarea name="lesson" rows="2"></textarea></label>
+    </details>
+
+    <div class="score-line" id="score-line"></div>
     <div class="row end">
       <button type="button" id="btn-cancel" class="ghost">ביטול</button>
       <button type="submit" class="primary">תיוק העסקה</button>
@@ -261,6 +271,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
