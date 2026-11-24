@@ -1,9 +1,10 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // Based on "ICT Killzones + Pivots [TFO]" (c) tradeforopp, MPL 2.0
 // Modifications: custom killzone/session defaults, True Opens as opening prices,
-// New York timezone option (DST-aware), and an NWOG/NDOG opening gaps module.
+// New York timezone option (DST-aware), NWOG/NDOG opening gaps, True Week/Month Open,
+// previous day/week highs and lows, session limit, and conversion to Pine Script v6.
 
-//@version=5
+//@version=6
 indicator("ICT Toolkit (KZP by TFO base)", "ICT Toolkit", true, max_labels_count = 500, max_lines_count = 500, max_boxes_count = 500)
 
 
@@ -136,6 +137,21 @@ two_color           = input.color(#2962ff, "", inline = "TWO", group = g_HTF)
 use_tmo             = input.bool(true, "", inline = "TMO", group = g_HTF)
 tmo_text            = input.string("TMO", "", inline = "TMO", group = g_HTF)
 tmo_color           = input.color(#ff9800, "", inline = "TMO", group = g_HTF)
+
+
+var g_PREV          = "Previous Day / Week High & Low"
+lvl_style           = input.string(defval = 'Solid', title = "Style", options = ['Solid', 'Dotted', 'Dashed'], inline = "P0", group = g_PREV)
+lvl_width           = input.int(1, "", inline = "P0", group = g_PREV)
+
+use_pd              = input.bool(true, "", inline = "PD", group = g_PREV)
+pdh_text            = input.string("PDH", "", inline = "PD", group = g_PREV)
+pdl_text            = input.string("PDL", "", inline = "PD", group = g_PREV)
+pd_color            = input.color(#e91e63, "", inline = "PD", group = g_PREV)
+
+use_pw              = input.bool(true, "", inline = "PW", group = g_PREV)
+pwh_text            = input.string("PWH", "", inline = "PW", group = g_PREV)
+pwl_text            = input.string("PWL", "", inline = "PW", group = g_PREV)
+pw_color            = input.color(#00bcd4, "", inline = "PW", group = g_PREV)
 
 
 var g_GAP           = "Opening Gaps (NWOG / NDOG)"
@@ -327,11 +343,12 @@ check_open(_line, _label) =>
 
 
 // ---------------------------------------- Core Logic --------------------------------------------------
-s_style := get_line_type(s_style)
-h_style := get_line_type(h_style)
-v_style := get_line_type(v_style)
+s_sty  = get_line_type(s_style)
+h_sty  = get_line_type(h_style)
+v_sty  = get_line_type(v_style)
+lvl_sty = get_line_type(lvl_style)
 
-lb_size := get_label_size(lb_size)
+lb_sz  = get_label_size(lb_size)
 
 var color as_box_color = get_box_color(as_color, box_transparency)
 var color lo_box_color = get_box_color(lo_color, box_transparency)
@@ -349,8 +366,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
     // Asia
     if use_asia
         if t_as and not t_as[1]
-            as_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = as_color, width = s_width)
-            as_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = as_color, width = s_width)
+            as_hi_line := line.new(bar_index, high, bar_index, high, style = s_sty, color = as_color, width = s_width)
+            as_lo_line := line.new(bar_index, low, bar_index, low, style = s_sty, color = as_color, width = s_width)
             keep_line(as_lines, as_hi_line, session_limit * 2)
             keep_line(as_lines, as_lo_line, session_limit * 2)
 
@@ -359,8 +376,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
                 keep_box(as_boxes, as_box, session_limit)
 
             if as_label
-                as_hi_label := label.new(bar_index, high, ash_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
-                as_lo_label := label.new(bar_index, low, asl_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                as_hi_label := label.new(bar_index, high, ash_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_sz)
+                as_lo_label := label.new(bar_index, low, asl_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_sz)
                 keep_label(as_labels, as_hi_label, session_limit * 2)
                 keep_label(as_labels, as_lo_label, session_limit * 2)
         else if t_as
@@ -375,8 +392,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
     // London
     if use_london
         if t_lo and not t_lo[1]
-            lo_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = lo_color, width = s_width)
-            lo_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = lo_color, width = s_width)
+            lo_hi_line := line.new(bar_index, high, bar_index, high, style = s_sty, color = lo_color, width = s_width)
+            lo_lo_line := line.new(bar_index, low, bar_index, low, style = s_sty, color = lo_color, width = s_width)
             keep_line(lo_lines, lo_hi_line, session_limit * 2)
             keep_line(lo_lines, lo_lo_line, session_limit * 2)
 
@@ -385,8 +402,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
                 keep_box(lo_boxes, lo_box, session_limit)
 
             if lo_label
-                lo_hi_label := label.new(bar_index, high, loh_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
-                lo_lo_label := label.new(bar_index, low, lol_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                lo_hi_label := label.new(bar_index, high, loh_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_sz)
+                lo_lo_label := label.new(bar_index, low, lol_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_sz)
                 keep_label(lo_labels, lo_hi_label, session_limit * 2)
                 keep_label(lo_labels, lo_lo_label, session_limit * 2)
         else if t_lo
@@ -401,8 +418,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
     // Pre Session
     if use_pre
         if t_pr and not t_pr[1]
-            pr_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = pr_color, width = s_width)
-            pr_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = pr_color, width = s_width)
+            pr_hi_line := line.new(bar_index, high, bar_index, high, style = s_sty, color = pr_color, width = s_width)
+            pr_lo_line := line.new(bar_index, low, bar_index, low, style = s_sty, color = pr_color, width = s_width)
             keep_line(pr_lines, pr_hi_line, session_limit * 2)
             keep_line(pr_lines, pr_lo_line, session_limit * 2)
 
@@ -411,8 +428,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
                 keep_box(pr_boxes, pr_box, session_limit)
 
             if pr_label
-                pr_hi_label := label.new(bar_index, high, prh_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
-                pr_lo_label := label.new(bar_index, low, prl_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                pr_hi_label := label.new(bar_index, high, prh_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_sz)
+                pr_lo_label := label.new(bar_index, low, prl_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_sz)
                 keep_label(pr_labels, pr_hi_label, session_limit * 2)
                 keep_label(pr_labels, pr_lo_label, session_limit * 2)
         else if t_pr
@@ -427,8 +444,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
     // NY AM
     if use_nyam
         if t_na and not t_na[1]
-            na_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = na_color, width = s_width)
-            na_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = na_color, width = s_width)
+            na_hi_line := line.new(bar_index, high, bar_index, high, style = s_sty, color = na_color, width = s_width)
+            na_lo_line := line.new(bar_index, low, bar_index, low, style = s_sty, color = na_color, width = s_width)
             keep_line(na_lines, na_hi_line, session_limit * 2)
             keep_line(na_lines, na_lo_line, session_limit * 2)
 
@@ -437,8 +454,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
                 keep_box(na_boxes, na_box, session_limit)
 
             if na_label
-                na_hi_label := label.new(bar_index, high, nah_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
-                na_lo_label := label.new(bar_index, low, nal_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                na_hi_label := label.new(bar_index, high, nah_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_sz)
+                na_lo_label := label.new(bar_index, low, nal_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_sz)
                 keep_label(na_labels, na_hi_label, session_limit * 2)
                 keep_label(na_labels, na_lo_label, session_limit * 2)
         else if t_na
@@ -453,8 +470,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
     // NY PM
     if use_nypm
         if t_np and not t_np[1]
-            np_hi_line := line.new(bar_index, high, bar_index, high, style = s_style, color = np_color, width = s_width)
-            np_lo_line := line.new(bar_index, low, bar_index, low, style = s_style, color = np_color, width = s_width)
+            np_hi_line := line.new(bar_index, high, bar_index, high, style = s_sty, color = np_color, width = s_width)
+            np_lo_line := line.new(bar_index, low, bar_index, low, style = s_sty, color = np_color, width = s_width)
             keep_line(np_lines, np_hi_line, session_limit * 2)
             keep_line(np_lines, np_lo_line, session_limit * 2)
 
@@ -463,8 +480,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
                 keep_box(np_boxes, np_box, session_limit)
 
             if np_label
-                np_hi_label := label.new(bar_index, high, nph_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_size)
-                np_lo_label := label.new(bar_index, low, npl_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_size)
+                np_hi_label := label.new(bar_index, high, nph_str, color = transparent, textcolor = lb_color, style = label.style_label_down, size = lb_sz)
+                np_lo_label := label.new(bar_index, low, npl_str, color = transparent, textcolor = lb_color, style = label.style_label_up, size = lb_sz)
                 keep_label(np_labels, np_hi_label, session_limit * 2)
                 keep_label(np_labels, np_lo_label, session_limit * 2)
         else if t_np
@@ -479,26 +496,26 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
     // Vertical Lines
     if use_v1
         if t_v1 and not t_v1[1]
-            v1_line := line.new(bar_index, high, bar_index, low, style = v_style, width = v_width, extend = extend.both, color = v1_color)
+            v1_line := line.new(bar_index, high, bar_index, low, style = v_sty, width = v_width, extend = extend.both, color = v1_color)
             keep_line(v1_lines, v1_line, session_limit)
     if use_v2
         if t_v2 and not t_v2[1]
-            v2_line := line.new(bar_index, high, bar_index, low, style = v_style, width = v_width, extend = extend.both, color = v2_color)
+            v2_line := line.new(bar_index, high, bar_index, low, style = v_sty, width = v_width, extend = extend.both, color = v2_color)
             keep_line(v2_lines, v2_line, session_limit)
     if use_v3
         if t_v3 and not t_v3[1]
-            v3_line := line.new(bar_index, high, bar_index, low, style = v_style, width = v_width, extend = extend.both, color = v3_color)
+            v3_line := line.new(bar_index, high, bar_index, low, style = v_sty, width = v_width, extend = extend.both, color = v3_color)
             keep_line(v3_lines, v3_line, session_limit)
     if use_v4
         if t_v4 and not t_v4[1]
-            v4_line := line.new(bar_index, high, bar_index, low, style = v_style, width = v_width, extend = extend.both, color = v4_color)
+            v4_line := line.new(bar_index, high, bar_index, low, style = v_sty, width = v_width, extend = extend.both, color = v4_color)
             keep_line(v4_lines, v4_line, session_limit)
 
     // Horizontal Lines (True Opens)
     if use_h1
         if t_h1 and not t_h1[1]
-            h1_line := line.new(bar_index, open, bar_index, open, style = h_style, width = h_width, color = h1_color)
-            h1_label := label.new(bar_index, open, h1_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_size)
+            h1_line := line.new(bar_index, open, bar_index, open, style = h_sty, width = h_width, color = h1_color)
+            h1_label := label.new(bar_index, open, h1_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_sz)
             keep_line(h1_lines, h1_line, session_limit)
             keep_label(h1_labels, h1_label, session_limit)
         else if not t_h1
@@ -510,8 +527,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
 
     if use_h2
         if t_h2 and not t_h2[1]
-            h2_line := line.new(bar_index, open, bar_index, open, style = h_style, width = h_width, color = h2_color)
-            h2_label := label.new(bar_index, open, h2_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_size)
+            h2_line := line.new(bar_index, open, bar_index, open, style = h_sty, width = h_width, color = h2_color)
+            h2_label := label.new(bar_index, open, h2_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_sz)
             keep_line(h2_lines, h2_line, session_limit)
             keep_label(h2_labels, h2_label, session_limit)
         else if not t_h2
@@ -523,8 +540,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
 
     if use_h3
         if t_h3 and not t_h3[1]
-            h3_line := line.new(bar_index, open, bar_index, open, style = h_style, width = h_width, color = h3_color)
-            h3_label := label.new(bar_index, open, h3_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_size)
+            h3_line := line.new(bar_index, open, bar_index, open, style = h_sty, width = h_width, color = h3_color)
+            h3_label := label.new(bar_index, open, h3_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_sz)
             keep_line(h3_lines, h3_line, session_limit)
             keep_label(h3_labels, h3_label, session_limit)
         else if not t_h3
@@ -536,8 +553,8 @@ if timeframe.in_seconds("") <= timeframe.in_seconds(tf_limit)
 
     if use_h4
         if t_h4 and not t_h4[1]
-            h4_line := line.new(bar_index, open, bar_index, open, style = h_style, width = h_width, color = h4_color)
-            h4_label := label.new(bar_index, open, h4_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_size)
+            h4_line := line.new(bar_index, open, bar_index, open, style = h_sty, width = h_width, color = h4_color)
+            h4_label := label.new(bar_index, open, h4_text, style = label.style_label_left, color = transparent, textcolor = lb_color, size = lb_sz)
             keep_line(h4_lines, h4_line, session_limit)
             keep_label(h4_labels, h4_label, session_limit)
         else if not t_h4
@@ -560,7 +577,7 @@ f_htf_open(_trig, _show, _text, _col, _lines, _labels) =>
     var label lb = na
     if _show and _trig
         cur := line.new(bar_index, open, bar_index, open, style = get_line_type(htf_style), width = htf_width, color = _col)
-        lb := label.new(bar_index, open, _text, style = label.style_label_left, color = transparent, textcolor = _col, size = lb_size)
+        lb := label.new(bar_index, open, _text, style = label.style_label_left, color = transparent, textcolor = _col, size = lb_sz)
         keep_line(_lines, cur, htf_hist)
         keep_label(_labels, lb, htf_hist)
     if _show and not _trig and not na(cur)
@@ -624,7 +641,8 @@ f_addGap(_boxes, _mids, _lbls, _maxN, _col, _name) =>
         line.delete(array.shift(_mids))
         label.delete(array.shift(_lbls))
 
-new_trading_day = timeframe.isintraday and nz(ta.change(time("D")), 0) != 0
+new_day = nz(ta.change(time("D")), 0) != 0
+new_trading_day = timeframe.isintraday and new_day
 has_gap = new_trading_day and not na(close[1]) and open != close[1]
 
 if has_gap
@@ -634,3 +652,50 @@ if has_gap
     if not is_week_open and show_ndog
         f_addGap(ndog_boxes, ndog_mids, ndog_lbls, ndog_count, ndog_color, "NDOG")
 // ---------------------------------------- NWOG / NDOG --------------------------------------------------
+
+
+// ---------------------------------------- Previous Day / Week High & Low --------------------------------------------------
+// Day = CME trading day (starts 18:00 NY), week = CME trading week (starts Sunday 18:00 NY).
+// Each line starts at the candle that made the high/low and extends right until the next period.
+// Uses bar time instead of bar index so weekly lines also work on 1-minute charts.
+f_prev_levels(_newPeriod, _show, _hText, _lText, _col) =>
+    var float curHi = na
+    var float curLo = na
+    var int curHiTime = na
+    var int curLoTime = na
+    var line hiLine = na
+    var line loLine = na
+    var label hiLbl = na
+    var label loLbl = na
+    if _newPeriod and _show and not na(curHi)
+        line.delete(hiLine)
+        line.delete(loLine)
+        label.delete(hiLbl)
+        label.delete(loLbl)
+        hiLine := line.new(curHiTime, curHi, time, curHi, xloc = xloc.bar_time, style = lvl_sty, width = lvl_width, color = _col)
+        loLine := line.new(curLoTime, curLo, time, curLo, xloc = xloc.bar_time, style = lvl_sty, width = lvl_width, color = _col)
+        hiLbl := label.new(time, curHi, _hText, xloc = xloc.bar_time, style = label.style_label_left, color = transparent, textcolor = _col, size = lb_sz)
+        loLbl := label.new(time, curLo, _lText, xloc = xloc.bar_time, style = label.style_label_left, color = transparent, textcolor = _col, size = lb_sz)
+    if _newPeriod
+        curHi := high
+        curLo := low
+        curHiTime := time
+        curLoTime := time
+    if not _newPeriod and (na(curHi) or high > curHi)
+        curHi := high
+        curHiTime := time
+    if not _newPeriod and (na(curLo) or low < curLo)
+        curLo := low
+        curLoTime := time
+    if not na(hiLine)
+        hiLine.set_x2(time)
+        loLine.set_x2(time)
+        hiLbl.set_x(time)
+        loLbl.set_x(time)
+
+tf_sec = timeframe.in_seconds("")
+if tf_sec < 86400
+    f_prev_levels(new_day, use_pd, pdh_text, pdl_text, pd_color)
+if tf_sec < 604800
+    f_prev_levels(new_week, use_pw, pwh_text, pwl_text, pw_color)
+// ---------------------------------------- Previous Day / Week High & Low --------------------------------------------------
