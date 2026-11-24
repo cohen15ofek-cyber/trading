@@ -203,3 +203,47 @@ fieldset .hint { margin: 0; font-size: 12px; }
 @media (max-width: 520px) {
   .cal-d b, .cal-w b, .cal-d .num, .cal-w .num { font-size: 9px; letter-spacing: -0.2px; }
 }
+
+/* KPI cards */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px;
+  box-shadow: 0 1px 3px rgba(40, 25, 90, .06); min-height: 104px; }
+.kpi-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.kpi .k, .tile .k { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .v { font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--text); text-align: right; }
+.up { color: var(--pos) !important; } .down { color: var(--neg) !important; }
+.kpi-vis { display: flex; flex-direction: column; align-items: center; gap: 2px; direction: ltr; }
+.gauge { width: 96px; height: auto; display: block; }
+.donut { width: 58px; height: 58px; display: block; }
+.gcounts { display: flex; gap: 6px; }
+.gc { font-size: 11px; font-weight: 650; min-width: 20px; text-align: center; padding: 1px 6px; border-radius: 999px; }
+.gc.win { background: #e3f5ea; color: var(--pos); }
+.gc.be { background: var(--tint2); color: var(--accent-d); }
+.gc.loss { background: #fde8e9; color: var(--neg); }
+.kpi-foot { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.wl { display: flex; gap: 3px; height: 7px; direction: ltr; }
+.wl span { border-radius: 4px; min-width: 4px; }
+.wl .w { background: var(--pos); } .wl .l { background: var(--neg); }
+.wl-labels { display: flex; justify-content: space-between; direction: ltr; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Small stat tiles: label on top, value under it */
+.tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.tile { background: var(--surface); box-shadow: 0 1px 3px rgba(40, 25, 90, .05); display: flex; flex-direction: column; gap: 6px; }
+.tile .v { font-size: 20px; line-height: 1.15; text-align: right; }
+.unit-pick { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); }
+.unit-pick .seg button { padding: 5px 14px; font-weight: 650; }
+.monthbar .row { align-items: end; }
+@media (min-width: 900px) {
+  .kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .tiles#tiles { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+}
+.gauge { width: 84px; }
+@media (max-width: 520px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi { grid-template-columns: minmax(0, 1fr); padding: 12px; min-height: 0; }
+  .kpi:first-child { grid-column: 1 / -1; }
+  .kpi .v { font-size: 22px; }
+  .kpi-vis { align-items: flex-start; }
+  .kpi:not(:first-child) .kpi-vis { align-items: center; }
+  .tiles#tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+}

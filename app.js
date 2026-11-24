@@ -372,7 +372,7 @@ function renderAnalyses() {
     const kinds = Object.entries(trades.filter(t => t.date === date).reduce((m, t) => { const k = kindLabel(t); m[k] = (m[k] || 0) + 1; return m; }, {}))
       .map(([k, n]) => `${k} ${n}`).join(' · ');
     card.append(el('p', { className: 'an-trades' }, a.n
-      ? el('span', {}, `${a.n === 1 ? 'עסקה אחת' : a.n + ' עסקאות'} · `, el('span', { className: 'num ' + cls(a.pnl), textContent: money(a.pnl) }),
+      ? el('span', {}, `${a.n === 1 ? 'עסקה אחת' : a.n + ' עסקאות'} · `, el('span', { className: 'num ' + cls(a.pnl), textContent: fmtU(sumU(trades.filter(t => t.date === date))) }),
         ` · ${kinds}` + (a.broken.length ? ` · נשברו חוקים ${a.broken.join(', ')}` : ''))
       : el('span', { className: 'muted', textContent: a.skipped ? 'דילגתי על היום לפי החוקים' : 'לא סחרתי' })));
     out.push(card);
@@ -476,39 +476,90 @@ function renderWeek() {
     ['ציון ממוצע', ts.length ? avg(ts.map(scoreOf)).toFixed(0) : '—'],
     ['החוק שנשבר הכי הרבה', worst ? `חוק ${worst[0]} (${worst[1]} ימים): ${RULES()[worst[0] - 1]}` : 'אף חוק לא נשבר'],
     ['העסקה הכי טובה בביצוע', best ? `${best.date} ${best.time || ''} · ${best.symbol} · ציון ${scoreOf(best)}` : '—'],
-    ['רווח/הפסד', money(ts.reduce((s, t) => s + pnlOf(t), 0)), 'num'],
+    ['רווח/הפסד', fmtU(sumU(ts)), 'num'],
   ]));
 }
 const rSum = ts => ts.reduce((s, t) => s + (rOf(t) || 0), 0);
-const moneyR = ts => `${money(ts.reduce((s, t) => s + pnlOf(t), 0))} · ${num(rSum(ts))}R`;
+let unit = 'usd';
+try { unit = localStorage.getItem('tj-unit') === 'R' ? 'R' : 'usd'; } catch {}
+const valOf = t => unit === 'R' ? rOf(t) || 0 : pnlOf(t);
+const sumU = ts => ts.reduce((s, t) => s + valOf(t), 0);
+const fmtU = v => unit === 'R' ? (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2) + 'R' : money(v);
+const upDown = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
+const frac = (a, b) => b ? `${a} / ${b}` : '—';
+
+// A half circle split into coloured parts, left to right.
+function gauge(parts) {
+  const total = parts.reduce((s, [v]) => s + v, 0);
+  const R = 50, cx = 60, cy = 60, W = 10;
+  const pt = a => `${(cx - R * Math.cos(a)).toFixed(2)} ${(cy - R * Math.sin(a)).toFixed(2)}`;
+  const arc = (a0, a1, color) => svgEl('path', { d: `M ${pt(a0)} A ${R} ${R} 0 0 1 ${pt(a1)}`, stroke: color, 'stroke-width': W,
+    fill: 'none', 'stroke-linecap': 'round' });
+  const svg = svgEl('svg', { viewBox: '0 0 120 66', class: 'gauge', 'aria-hidden': 'true' });
+  if (!total) { svg.append(arc(0, Math.PI, 'var(--grid)')); return svg; }
+  const shown = parts.filter(([v]) => v > 0), gap = shown.length > 1 ? 0.16 : 0;
+  let a = 0;
+  shown.forEach(([v, color], i) => {
+    const span = v / total * Math.PI;
+    svg.append(arc(a + (i ? gap / 2 : 0), a + span - (i < shown.length - 1 ? gap / 2 : 0), color));
+    a += span;
+  });
+  return svg;
+}
+// A ring: the green share of wins against losses.
+function donut(win, loss) {
+  const r = 22, C = 2 * Math.PI * r;
+  const svg = svgEl('svg', { viewBox: '0 0 60 60', class: 'donut', 'aria-hidden': 'true' });
+  svg.append(svgEl('circle', { cx: 30, cy: 30, r, fill: 'none', stroke: win + loss ? 'var(--neg)' : 'var(--grid)', 'stroke-width': 8 }));
+  if (win > 0) svg.append(svgEl('circle', { cx: 30, cy: 30, r, fill: 'none', stroke: 'var(--pos)', 'stroke-width': 8,
+    'stroke-dasharray': `${C * win / (win + loss)} ${C}`, transform: 'rotate(-90 30 30)' }));
+  return svg;
+}
+const counts = (...xs) => el('div', { className: 'gcounts' }, ...xs.map(([n, c, t]) => el('span', { className: 'gc ' + c, title: t, textContent: String(n) })));
+function kpi(label, value, valueCls, visual, foot) {
+  return el('div', { className: 'kpi' },
+    el('div', { className: 'kpi-text' }, el('div', { className: 'k', textContent: label }),
+      el('div', { className: 'v num ' + (valueCls || ''), textContent: value })),
+    ...(visual ? [el('div', { className: 'kpi-vis' }, ...visual)] : []),
+    ...(foot ? [el('div', { className: 'kpi-foot' }, ...foot)] : []));
+}
 function renderTiles(list) {
-  const p = list.map(pnlOf);
-  const w = p.filter(x => x > 0).length, l = p.filter(x => x < 0).length, net = p.reduce((s, x) => s + x, 0);
+  const vals = list.map(valOf), net = vals.reduce((s, x) => s + x, 0);
   const wins = list.filter(t => pnlOf(t) > 0), losses = list.filter(t => pnlOf(t) < 0);
-  const gw = wins.reduce((s, t) => s + pnlOf(t), 0), gl = -losses.reduce((s, t) => s + pnlOf(t), 0);
+  const w = wins.length, l = losses.length, be = list.length - w - l;
+  const gw = sumU(wins), gl = -sumU(losses);
+  const avgW = w ? gw / w : 0, avgL = l ? gl / l : 0;
   const sc = avg(list.map(scoreOf));
   const ds = processDays().filter(inRange).map(analyzeDay);
-  const tradeDays = [...new Set(list.map(t => t.date))];
-  const dayPnl = d => list.filter(t => t.date === d).reduce((s, t) => s + pnlOf(t), 0);
+  const dayVals = [...new Set(list.map(t => t.date))].map(d => sumU(list.filter(t => t.date === d)));
+  const dw = dayVals.filter(v => v > 0).length, dl = dayVals.filter(v => v < 0).length, dbe = dayVals.length - dw - dl;
   // This week so far: Sunday to today, same account filter, any month.
   const [ws] = weekOf(localDate());
   const week = trades.filter(t => t.date >= ws && t.date <= localDate() && (acct === 'all' || acctOf(t) === acct));
-  const avgOf = ts => ts.length ? `${money(ts.reduce((s, t) => s + pnlOf(t), 0) / ts.length)} · ${num(rSum(ts) / ts.length)}R` : '—';
   $('#month-title').textContent = 'דאשבורד · ' + monthName(month);
+  setSeg('#unit', unit);
+  $('#kpis').replaceChildren(
+    kpi('רווח/הפסד נטו', list.length ? fmtU(net) : '—', upDown(net), null,
+      [el('span', { className: 'muted', textContent: list.length === 1 ? 'עסקה אחת' : `${list.length} עסקאות` })]),
+    kpi('אחוז הצלחה', w + l ? Math.round(w / (w + l) * 100) + '%' : '—', '',
+      [gauge([[w, 'var(--pos)'], [be, 'var(--accent)'], [l, 'var(--neg)']]), counts([w, 'win', 'ניצחונות'], [be, 'be', 'BE'], [l, 'loss', 'הפסדים'])]),
+    kpi('Profit Factor', gl ? num(gw / gl) : gw ? '∞' : '—', '', [donut(gw, gl)]),
+    kpi('ימים מרוויחים', dw + dl ? Math.round(dw / (dw + dl) * 100) + '%' : '—', '',
+      [gauge([[dw, 'var(--pos)'], [dbe, 'var(--accent)'], [dl, 'var(--neg)']]), counts([dw, 'win', 'ימים מרוויחים'], [dbe, 'be', 'ימים מאוזנים'], [dl, 'loss', 'ימים מפסידים'])]),
+    kpi('ממוצע ניצחון / הפסד', avgL ? num(avgW / avgL) : '—', '', null, w || l ? [
+      el('div', { className: 'wl' }, ...(avgW ? [el('span', { className: 'w', style: `flex:${avgW}` })] : []),
+        ...(avgL ? [el('span', { className: 'l', style: `flex:${avgL}` })] : [])),
+      el('div', { className: 'wl-labels' }, el('span', { className: 'up', textContent: w ? fmtU(avgW) : '—' }),
+        el('span', { className: 'down', textContent: l ? fmtU(-avgL) : '—' }))] : null),
+  );
   $('#tiles').replaceChildren(...[
-    ...(acct === 'demo' ? [['מבחן הדמו', `${trades.filter(t => acctOf(t) === 'demo').length} / ${DEMO_TEST} עסקאות`]] : []),
-    ['מתחילת השבוע', week.length ? moneyR(week) : '—', week.length ? cls(week.reduce((s, t) => s + pnlOf(t), 0)) : ''],
-    [month === 'all' ? 'רווח/הפסד נקי' : 'מתחילת ' + monthName(month).split(' ')[0], list.length ? moneyR(list) : '—', cls(net)],
+    ...(acct === 'demo' ? [['מבחן הדמו', `${trades.filter(t => acctOf(t) === 'demo').length} / ${DEMO_TEST}`]] : []),
+    ['מתחילת השבוע', week.length ? fmtU(sumU(week)) : '—', upDown(sumU(week))],
     [month === 'all' ? 'עסקאות' : 'עסקאות החודש', String(list.length)],
-    ['סה״כ עסקאות מאז ההתחלה', String(trades.length)],
-    ['ניצחון / הפסד / BE', `${w} / ${l} / ${list.length - w - l}`],
-    ['אחוז הצלחה (בלי BE)', w + l ? (w / (w + l) * 100).toFixed(0) + '%' : '—'],
-    ['Profit Factor', gl ? num(gw / gl) : gw ? '∞' : '—'],
-    ['ממוצע ניצחון', avgOf(wins)],
-    ['ממוצע הפסד', avgOf(losses)],
-    ['ימים מרוויחים', tradeDays.length ? `${tradeDays.filter(d => dayPnl(d) > 0).length} / ${tradeDays.length}` : '—'],
-    ['ימים שעמדתי בחוקים', ds.length ? keptText(ds) : '—'],
-    ['עסקאות מהתוכנית', list.length ? `${list.filter(t => t.kind === 'plan').length} / ${list.length}` : '—'],
+    ['סה״כ עסקאות', String(trades.length)],
+    ['ניצחון / הפסד / BE', `${w} / ${l} / ${be}`],
+    ['ימים בחוקים', frac(ds.filter(d => d.kept).length, ds.length)],
+    ['עסקאות תוכנית', frac(list.filter(t => t.kind === 'plan').length, list.length)],
     ['ציון ממוצע', sc == null ? '—' : sc.toFixed(0)],
   ].map(tile));
 }
@@ -529,10 +580,10 @@ function renderCalendar(list) {
       if (!d) { grid.append(el('div', { className: 'cal-d empty' })); continue; }
       const ts = list.filter(t => t.date === d), pnl = ts.reduce((s, t) => s + pnlOf(t), 0);
       const c = el('div', { className: 'cal-d' + (ts.length ? (pnl > 0 ? ' pos' : pnl < 0 ? ' neg' : ' flat') : '') + (d === localDate() ? ' today' : ''),
-        title: ts.length ? `${fmtDate(d)} · ${ts.length} עסקאות · ${moneyR(ts)}` : fmtDate(d) },
+        title: ts.length ? `${fmtDate(d)} · ${ts.length} עסקאות · ${money(pnl)} · ${num(rSum(ts))}R` : fmtDate(d) },
         el('span', { className: 'cal-n', textContent: String(Number(d.slice(8))) }));
       if (ts.length) {
-        c.append(el('b', { className: 'num', textContent: money(pnl) }), el('span', { className: 'num', textContent: num(rSum(ts)) + 'R' }),
+        c.append(el('b', { className: 'num', textContent: fmtU(sumU(ts)) }),
           el('span', { className: 'cal-t', textContent: ts.length === 1 ? 'עסקה אחת' : ts.length + ' עסקאות' }));
         c.onclick = () => { $('#day').value = d; loadDayForms(); render(); showView('analyses'); };
       }
@@ -540,7 +591,7 @@ function renderCalendar(list) {
     }
     const wk = list.filter(t => row.includes(t.date)), wpnl = wk.reduce((s, t) => s + pnlOf(t), 0);
     grid.append(el('div', { className: 'cal-w' + (wk.length ? (wpnl > 0 ? ' pos' : wpnl < 0 ? ' neg' : '') : '') },
-      ...(wk.length ? [el('b', { className: 'num', textContent: money(wpnl) }), el('span', { className: 'num', textContent: num(rSum(wk)) + 'R' }),
+      ...(wk.length ? [el('b', { className: 'num', textContent: fmtU(sumU(wk)) }),
         el('span', { className: 'cal-t', textContent: (n => n === 1 ? 'יום אחד' : n + ' ימים')(new Set(wk.map(t => t.date)).size) })] : [el('span', { className: 'muted', textContent: '—' })])));
   }
   box.replaceChildren(grid);
@@ -548,7 +599,7 @@ function renderCalendar(list) {
 // Where the money goes: the patterns from the review, counted for the chosen month.
 function renderLeaks(list) {
   const sum = ts => ts.reduce((s, t) => s + pnlOf(t), 0);
-  const row = (k, ts, bad = true) => [k, ts.length ? `${ts.length === 1 ? 'עסקה אחת' : ts.length + ' עסקאות'} · ${money(sum(ts))}` : '0', ts.length && bad ? 'warn' : ''];
+  const row = (k, ts, bad = true) => [k, ts.length ? `${ts.length === 1 ? 'עסקה אחת' : ts.length + ' עסקאות'} · ${fmtU(sumU(ts))}` : '0', ts.length && bad ? 'warn' : ''];
   const rr = list.map(t => t.rr).filter(x => x != null);
   const early = list.filter(t => t.be === 'early');
   const missed = list.filter(t => t.hit === 'yes' && pnlOf(t) <= 0);
@@ -583,7 +634,7 @@ function renderDays() {
     const td = (text, c = '') => el('td', { className: c, textContent: text });
     const row = el('tr', {}, td(d, 'num'), td(x.skipped ? 'דילגתי' : x.n ? 'סחרתי' : '—'),
       td(x.day.mood != null ? String(x.day.mood) : '—', 'num'), td(String(x.n), 'num'),
-      td(x.score == null ? '—' : x.score.toFixed(0), 'num'), td(x.n ? money(x.pnl) : '—', 'num ' + cls(x.pnl)),
+      td(x.score == null ? '—' : x.score.toFixed(0), 'num'), td(x.n ? fmtU(sumU(trades.filter(t => t.date === d))) : '—', 'num ' + cls(x.pnl)),
       td(x.kept ? '✓ עמדתי בחוקים' : x.broken.length ? 'חוק ' + x.broken.join(', ') : x.n ? 'נשבר חוק' : '—', x.kept ? 'ok' : x.n ? 'warn' : ''));
     row.style.cursor = 'pointer';
     row.onclick = () => { $('#day').value = d; loadDayForms(); render(); showView('rules'); scrollTo({ top: 0 }); };
@@ -630,9 +681,11 @@ function niceStep(raw) {
 }
 function renderEquity(list) {
   let eq = 0;
-  const pts = list.length ? [{ y: 0, tip: 'התחלה · $0' }, ...list.map(t => { const p = pnlOf(t); eq += p;
-    return { y: eq, tip: `${t.date} · עסקה ${money(p)} · מצטבר ${money(eq)}` }; })] : [];
-  lineChart($('#equity'), pts, { label: 'רווח/הפסד מצטבר', ref: 0, fmt: v => '$' + v.toLocaleString('en-US'),
+  $('#equity-title').textContent = `רווח/הפסד מצטבר (${unit === 'R' ? 'R' : '$'})`;
+  const pts = list.length ? [{ y: 0, tip: 'התחלה · ' + fmtU(0) }, ...list.map(t => { const p = valOf(t); eq += p;
+    return { y: eq, tip: `${t.date} · עסקה ${fmtU(p)} · מצטבר ${fmtU(eq)}` }; })] : [];
+  lineChart($('#equity'), pts, { label: 'רווח/הפסד מצטבר', ref: 0,
+    fmt: v => unit === 'R' ? num(v, 1) + 'R' : '$' + v.toLocaleString('en-US'),
     first: list.length ? list[0].date : '', last: list.length ? list[list.length - 1].date : '' });
 }
 function renderScores() {
@@ -649,7 +702,7 @@ function showTip(e, text) {
 }
 const hideTip = () => { $('#tip').hidden = true; };
 
-function renderBars(sel, list, keysOf, order, inR = false) {
+function renderBars(sel, list, keysOf, order, inR = unit === 'R') {
   const groups = new Map();
   const fmt = v => inR ? (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2) + 'R' : money(v);
   list.forEach(t => keysOf(t).forEach(k => {
@@ -920,7 +973,7 @@ function render() {
   renderBars('#by-mind', list.filter(t => t.mind), t => [qLabel('mind', t.mind)], Q.mind[1].map(o => o[1]));
   renderBars('#by-exit', list.filter(t => t.exit), t => [qLabel('exit', t.exit)], Q.exit[1].map(o => o[1]));
   const hours = [...new Set(list.filter(t => t.time).map(t => t.time.slice(0, 2)))].sort().map(h => `${h}:00–${h}:59`);
-  renderBars('#by-hour', list.filter(t => t.time), t => [`${t.time.slice(0, 2)}:00–${t.time.slice(0, 2)}:59`], hours, true);
+  renderBars('#by-hour', list.filter(t => t.time), t => [`${t.time.slice(0, 2)}:00–${t.time.slice(0, 2)}:59`], hours);
   renderBars('#by-day', list, t => [DAYS[new Date(t.date + 'T12:00').getDay()]], DAYS);
 }
 async function refresh() {
@@ -940,6 +993,7 @@ async function init() {
   $$('.tabs button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
   $$('.month-select').forEach(sel => sel.addEventListener('change', () => { month = sel.value; render(); }));
   $$('.acct-select').forEach(sel => sel.addEventListener('change', () => { acct = sel.value; render(); }));
+  $$('#unit button').forEach(b => b.onclick = () => { unit = b.dataset.v; try { localStorage.setItem('tj-unit', unit); } catch {} render(); });
   for (const [k, [label, opts]] of Object.entries(Q)) {
     if (!$('#q-' + k)) continue;
     $('#q-' + k).replaceChildren(el('span', { className: 'q-label', textContent: label }),

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>יומן מסחר – משמעת ועקביות</title>
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 <header class="top">
@@ -221,8 +221,12 @@
       <div class="row">
         <label>חודש <select class="month-select" id="m-summary"></select></label>
         <label>חשבון <select class="acct-select"><option value="all">הכול</option><option value="real">אמיתי</option><option value="demo">דמו</option></select></label>
+        <div class="unit-pick"><span>הצג ב</span>
+          <div class="seg" id="unit"><button type="button" data-v="usd">$</button><button type="button" data-v="R">R</button></div>
+        </div>
       </div>
     </div>
+    <div class="kpis" id="kpis"></div>
     <div class="tiles" id="tiles"></div>
     <div class="card"><h2 id="cal-title">לוח החודש</h2><div id="calendar"></div></div>
     <div class="card"><h2>איפה הכסף הולך</h2><div id="leaks"></div></div>
@@ -235,7 +239,7 @@
       <div id="scores" class="chart"></div>
     </div>
     <div class="card">
-      <h2>רווח/הפסד מצטבר ($)</h2>
+      <h2 id="equity-title">רווח/הפסד מצטבר</h2>
       <div id="equity" class="chart"></div>
     </div>
     <div class="grid2">
@@ -244,7 +248,7 @@
       <div class="card"><h2>רווח/הפסד: לונג מול שורט</h2><div id="by-dir"></div></div>
       <div class="card"><h2>רווח/הפסד לפי מה שעבר לי בראש</h2><div id="by-mind"></div></div>
       <div class="card"><h2>רווח/הפסד לפי איך יצאתי</h2><div id="by-exit"></div></div>
-      <div class="card"><h2>R לפי שעת כניסה</h2><div id="by-hour"></div></div>
+      <div class="card"><h2>רווח/הפסד לפי שעת כניסה</h2><div id="by-hour"></div></div>
       <div class="card"><h2>רווח/הפסד לפי יום בשבוע</h2><div id="by-day"></div></div>
     </div>
     <div class="card table-wrap"><table id="days-table">
@@ -349,6 +353,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>
