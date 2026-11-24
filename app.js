@@ -164,7 +164,8 @@ function gateOf(day) {
   const nos = RULES().map((_, i) => i).filter(i => a[i] === false);
   const moodLow = day.mood != null && day.mood < 6;
   const complete = RULES().every((_, i) => a[i] === true || a[i] === false);
-  return { nos, moodLow, status: nos.length ? 'no' : complete ? 'yes' : 'open' };
+  const headNo = day.headspace === 'no';
+  return { nos, moodLow, headNo, status: nos.length || headNo ? 'no' : complete ? 'yes' : 'open' };
 }
 function analyzeDay(date) {
   const ts = trades.filter(t => t.date === date).sort(byTime);
@@ -189,7 +190,7 @@ function analyzeDay(date) {
   const skipped = !ts.length && gate.status === 'no';
   const flagged = ts.some(t => t.kept === false);
   return { date, n: ts.length, losses, wins, bes, last: prev, pnl: cum, score: avg(ts.map(scoreOf)), day, gate, skipped,
-    broken: [...broken].sort((a, b) => a - b), kept: skipped || (ts.length > 0 && !broken.size && !flagged) };
+    broken: [...broken].sort((a, b) => a - b), kept: skipped || (ts.length > 0 && !broken.size && !flagged && !gate.headNo) };
 }
 const inRange = date => month === 'all' || date.startsWith(month);
 const filtered = () => trades.filter(t => inRange(t.date) && (acct === 'all' || acctOf(t) === acct)).sort(byTime);
@@ -198,19 +199,34 @@ const tradingDays = () => [...new Set(trades.map(t => t.date))].sort();
 const processDays = () => [...new Set([...tradingDays(), ...[...days.keys()].filter(d => analyzeDay(d).skipped)])].sort();
 
 /* ---------- pre-market ---------- */
+// Free-text day fields saved as they are typed.
+const DAY_TEXT = ['sleep', 'news', 'pd', 'liq'];
+const ENERGY = { high: 'גבוהה', mid: 'בינונית', low: 'נמוכה' };
+const AP_STATUS = { taken: 'לקחתי אותה', missed: 'לא לקחתי אותה', none: 'לא היה A+ היום' };
+// A thumbnail with a remove button, or nothing.
+function previewInto(sel, src, onRemove) {
+  if (!src) { $(sel).replaceChildren(); return; }
+  const fig = thumb(src);
+  fig.append(el('button', { type: 'button', textContent: '×', title: 'הסר', onclick: onRemove }));
+  $(sel).replaceChildren(fig);
+}
 function loadDayForms() {
   const d = dayOf(curDate());
   $('#bias-text').value = d.biasText || '';
   $('#mood').value = d.mood ?? '';
   $('#feeling').value = d.feeling || '';
   $('#review-text').value = d.review || '';
+  for (const k of DAY_TEXT) $('#' + k).value = d[k] ?? '';
+  const ap = d.aplus || {};
+  $('#ap-conf').value = ap.conf || ''; $('#ap-rr').value = ap.rr ?? ''; $('#ap-time').value = ap.time || ''; $('#ap-why').value = ap.why || '';
   resetScenarioForm();
 }
 function resetScenarioForm() {
   scEditing = null; scImage = null;
   $('#sc-text').value = '';
+  $('#sc-inval').value = '';
   setSeg('#sc-type', 'long');
-  $('#sc-title').textContent = 'תרחיש חדש';
+  $('#sc-title').textContent = '3. תרחיש חדש';
   $('#sc-add').textContent = 'הוספת תרחיש';
   $('#sc-cancel').hidden = true;
   renderScPreview();
@@ -233,6 +249,7 @@ function renderPre() {
     const body = el('div', { className: 'body' },
       el('span', { className: 'tag ' + s.type, textContent: DIR[s.type] }),
       el('p', { textContent: s.text || '' }),
+      ...(s.inval ? [el('p', { className: 'inval', textContent: 'מבטל: ' + s.inval })] : []),
       el('div', { className: 'played' }, el('span', { className: 'muted', textContent: 'אחרי הסשן:' }),
         el('div', { className: 'seg' }, ...PLAYED.map(([v, t]) => el('button', { type: 'button', textContent: t, ariaPressed: String(s.played === v),
           onclick: () => setList(list.map(x => x.id === s.id ? { ...x, played: x.played === v ? null : v } : x)) })))),
@@ -241,8 +258,8 @@ function renderPre() {
           onchange: e => setList(list.map(x => x.id === s.id ? { ...x, taken: e.target.checked } : x)) }), 'לקחתי את התרחיש'),
         el('button', { className: 'link', textContent: 'עריכה', onclick: () => {
           scEditing = s.id; scImage = s.image || null;
-          $('#sc-text').value = s.text || ''; setSeg('#sc-type', s.type);
-          $('#sc-title').textContent = 'עריכת תרחיש'; $('#sc-add').textContent = 'שמירת התרחיש'; $('#sc-cancel').hidden = false;
+          $('#sc-text').value = s.text || ''; $('#sc-inval').value = s.inval || ''; setSeg('#sc-type', s.type);
+          $('#sc-title').textContent = '3. עריכת תרחיש'; $('#sc-add').textContent = 'שמירת התרחיש'; $('#sc-cancel').hidden = false;
           renderScPreview(); $('#sc-text').focus();
         } }),
         el('button', { className: 'link', textContent: 'מחיקה', onclick: () => {
@@ -255,6 +272,15 @@ function renderPre() {
   }));
   if (!list.length) $('#sc-list').replaceChildren(el('p', { className: 'muted', textContent: 'עוד לא נכתבו תרחישים ליום הזה.' }));
   setSeg('#bias-result', d.biasResult || '');
+  setSeg('#energy', d.energy || '');
+  setSeg('#headspace', d.headspace || '');
+  $('#head-no').hidden = d.headspace !== 'no';
+  previewInto('#htf-preview', d.htfImage, () => saveDay(date, { htfImage: null }));
+  const ap = d.aplus || {};
+  setSeg('#ap-status', ap.status || '');
+  $('#ap-box').hidden = !['taken', 'missed'].includes(ap.status);
+  $('#ap-why-label').hidden = ap.status !== 'missed';
+  previewInto('#ap-preview', ap.image, () => saveDay(date, { aplus: { ...ap, image: null } }));
   const box = $('#rv-preview');
   if (d.reviewImage) {
     const fig = thumb(d.reviewImage);
@@ -268,7 +294,7 @@ const PLAYED = [['yes', 'קרה'], ['partial', 'חלקית'], ['no', 'לא קר�
 const playedLabel = v => (PLAYED.find(o => o[0] === v) || [, ''])[1];
 const BIAS_RESULT = { yes: 'הביאס צדק', partial: 'הביאס צדק חלקית', no: 'הביאס טעה' };
 const fmtDate = d => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
-const hasPre = d => !!(d && (d.bias || d.biasText || (d.scenarios || []).length));
+const hasPre = d => !!(d && (d.bias || d.biasText || d.htfImage || d.pd || d.liq || (d.scenarios || []).length));
 function weekOf(date) {
   const s = new Date(date + 'T12:00'); s.setDate(s.getDate() - s.getDay());
   const e = new Date(s); e.setDate(s.getDate() + 6);
@@ -311,7 +337,13 @@ function renderAnalyses() {
       el('button', { className: 'link', textContent: 'פתיחת היום', onclick: () => { $('#day').value = date; loadDayForms(); render(); showView('pre'); scrollTo({ top: 0 }); } }));
     const card = el('div', { className: 'card an-day' }, head);
     if (!hasPre(day)) card.append(el('p', { className: 'warn', textContent: 'לא נכתב pre-market ליום הזה.' }));
+    const mindBits = [day.sleep && `שינה ${day.sleep} שעות`, day.energy && 'אנרגיה ' + ENERGY[day.energy], day.mood != null && `מצב רגשי ${day.mood}`,
+      day.headspace && (day.headspace === 'yes' ? 'בראש הנכון' : 'לא בראש הנכון')].filter(Boolean);
+    if (mindBits.length) card.append(el('p', { className: 'an-mind' + (day.headspace === 'no' ? ' warn' : ''), textContent: mindBits.join(' · ') }));
+    if (day.htfImage) card.append(el('div', { className: 'thumbs' }, thumb(day.htfImage)));
     if (day.biasText) card.append(el('p', { className: 'an-text', textContent: day.biasText }));
+    for (const [k, label] of [['news', 'חדשות'], ['pd', 'Premium / Discount'], ['liq', 'נזילות']])
+      if (day[k]) card.append(el('p', { className: 'an-text' }, el('span', { className: 'muted', textContent: label + ': ' }), day[k]));
     if ((day.scenarios || []).length) card.append(el('div', { className: 'an-scs' }, ...day.scenarios.map(s => {
       const sc = el('div', { className: 'an-sc' });
       if (s.image) sc.append(el('img', { src: s.image, alt: 'תמונת התרחיש', onclick: () => view(s.image) }));
@@ -319,9 +351,18 @@ function renderAnalyses() {
         el('div', { className: 'row' }, el('span', { className: 'tag ' + s.type, textContent: DIR[s.type] }),
           ...(s.played ? [el('span', { className: 'res ' + (s.played === 'yes' ? 'win' : s.played === 'no' ? 'loss' : 'be'), textContent: playedLabel(s.played) })] : []),
           ...(s.taken ? [el('span', { className: 'res be', textContent: 'לקחתי' })] : [])),
-        ...(s.text ? [el('p', { textContent: s.text })] : [])));
+        ...(s.text ? [el('p', { textContent: s.text })] : []),
+        ...(s.inval ? [el('p', { className: 'inval', textContent: 'מבטל: ' + s.inval })] : [])));
       return sc;
     })));
+    const ap = day.aplus || {};
+    if (ap.status) {
+      const apEl = el('div', { className: 'an-review' }, el('span', { className: 'muted', textContent: 'עסקת ה־A+: ' }),
+        AP_STATUS[ap.status] + [ap.conf, ap.rr != null && ap.rr + 'R', ap.time && 'ב־' + ap.time].filter(Boolean).map(x => ' · ' + x).join('')
+        + (ap.status === 'missed' && ap.why ? ` · למה לא: ${ap.why}` : ''));
+      card.append(apEl);
+      if (ap.image) card.append(el('div', { className: 'thumbs' }, thumb(ap.image)));
+    }
     if (day.review || day.reviewImage) {
       const rv = el('div', { className: 'an-review' }, el('span', { className: 'muted', textContent: 'מה קרה בפועל: ' }));
       if (day.review) rv.append(el('span', { textContent: day.review }));
@@ -355,7 +396,8 @@ function renderRules() {
   const v = $('#verdict'), g = a.gate;
   const text = {
     yes: ['מותר לסחור היום.', 'סימנת כן על כל החוקים. המטרה היא 100/100, לא כסף.'],
-    no: ['היום לא סוחרים.', 'אם אני סוחר היום, אני עובר על החוקים שלי. לדלג על היום זה לעמוד בחוקים.'],
+    no: ['היום לא סוחרים.', g.headNo && !g.nos.length ? 'סימנת בבוקר שאתה לא בראש הנכון. לדלג על היום זה לעמוד בחוקים.'
+      : 'אם אני סוחר היום, אני עובר על החוקים שלי. לדלג על היום זה לעמוד בחוקים.'],
     open: ['לפני שפותחים את הגרף:', 'סמן כן או לא ליד כל חוק, ותכתוב איך אתה מרגיש.'],
   }[g.status];
   v.className = 'verdict ' + g.status;
@@ -437,25 +479,71 @@ function renderWeek() {
     ['רווח/הפסד', money(ts.reduce((s, t) => s + pnlOf(t), 0)), 'num'],
   ]));
 }
+const rSum = ts => ts.reduce((s, t) => s + (rOf(t) || 0), 0);
+const moneyR = ts => `${money(ts.reduce((s, t) => s + pnlOf(t), 0))} · ${num(rSum(ts))}R`;
 function renderTiles(list) {
   const p = list.map(pnlOf);
   const w = p.filter(x => x > 0).length, l = p.filter(x => x < 0).length, net = p.reduce((s, x) => s + x, 0);
-  const rs = list.map(rOf).filter(x => x != null);
+  const wins = list.filter(t => pnlOf(t) > 0), losses = list.filter(t => pnlOf(t) < 0);
+  const gw = wins.reduce((s, t) => s + pnlOf(t), 0), gl = -losses.reduce((s, t) => s + pnlOf(t), 0);
   const sc = avg(list.map(scoreOf));
   const ds = processDays().filter(inRange).map(analyzeDay);
+  const tradeDays = [...new Set(list.map(t => t.date))];
+  const dayPnl = d => list.filter(t => t.date === d).reduce((s, t) => s + pnlOf(t), 0);
+  // This week so far: Sunday to today, same account filter, any month.
+  const [ws] = weekOf(localDate());
+  const week = trades.filter(t => t.date >= ws && t.date <= localDate() && (acct === 'all' || acctOf(t) === acct));
+  const avgOf = ts => ts.length ? `${money(ts.reduce((s, t) => s + pnlOf(t), 0) / ts.length)} · ${num(rSum(ts) / ts.length)}R` : '—';
   $('#month-title').textContent = 'דאשבורד · ' + monthName(month);
   $('#tiles').replaceChildren(...[
     ...(acct === 'demo' ? [['מבחן הדמו', `${trades.filter(t => acctOf(t) === 'demo').length} / ${DEMO_TEST} עסקאות`]] : []),
+    ['מתחילת השבוע', week.length ? moneyR(week) : '—', week.length ? cls(week.reduce((s, t) => s + pnlOf(t), 0)) : ''],
+    [month === 'all' ? 'רווח/הפסד נקי' : 'מתחילת ' + monthName(month).split(' ')[0], list.length ? moneyR(list) : '—', cls(net)],
     [month === 'all' ? 'עסקאות' : 'עסקאות החודש', String(list.length)],
     ['סה״כ עסקאות מאז ההתחלה', String(trades.length)],
     ['ניצחון / הפסד / BE', `${w} / ${l} / ${list.length - w - l}`],
-    ['רווח/הפסד נקי', money(net), cls(net)],
     ['אחוז הצלחה (בלי BE)', w + l ? (w / (w + l) * 100).toFixed(0) + '%' : '—'],
-    ['R ממוצע', rs.length ? num(avg(rs)) + 'R' : '—'],
+    ['Profit Factor', gl ? num(gw / gl) : gw ? '∞' : '—'],
+    ['ממוצע ניצחון', avgOf(wins)],
+    ['ממוצע הפסד', avgOf(losses)],
+    ['ימים מרוויחים', tradeDays.length ? `${tradeDays.filter(d => dayPnl(d) > 0).length} / ${tradeDays.length}` : '—'],
     ['ימים שעמדתי בחוקים', ds.length ? keptText(ds) : '—'],
     ['עסקאות מהתוכנית', list.length ? `${list.filter(t => t.kind === 'plan').length} / ${list.length}` : '—'],
     ['ציון ממוצע', sc == null ? '—' : sc.toFixed(0)],
   ].map(tile));
+}
+// The month as a calendar: trades, dollars and R per day, with a total for each week.
+function renderCalendar(list) {
+  const box = $('#calendar');
+  $('#cal-title').textContent = 'לוח החודש' + (month === 'all' ? '' : ' · ' + monthName(month));
+  if (month === 'all') { box.replaceChildren(el('p', { className: 'muted', textContent: 'בחר חודש כדי לראות את הלוח.' })); return; }
+  const [y, m] = month.split('-').map(Number);
+  const startDay = new Date(y, m - 1, 1).getDay(), count = new Date(y, m, 0).getDate();
+  const grid = el('div', { className: 'cal' },
+    ...['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳', 'שבוע'].map(h => el('div', { className: 'cal-h', textContent: h })));
+  const cells = [...Array(startDay).fill(null), ...Array.from({ length: count }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)];
+  while (cells.length % 7) cells.push(null);
+  for (let i = 0; i < cells.length; i += 7) {
+    const row = cells.slice(i, i + 7);
+    for (const d of row) {
+      if (!d) { grid.append(el('div', { className: 'cal-d empty' })); continue; }
+      const ts = list.filter(t => t.date === d), pnl = ts.reduce((s, t) => s + pnlOf(t), 0);
+      const c = el('div', { className: 'cal-d' + (ts.length ? (pnl > 0 ? ' pos' : pnl < 0 ? ' neg' : ' flat') : '') + (d === localDate() ? ' today' : ''),
+        title: ts.length ? `${fmtDate(d)} · ${ts.length} עסקאות · ${moneyR(ts)}` : fmtDate(d) },
+        el('span', { className: 'cal-n', textContent: String(Number(d.slice(8))) }));
+      if (ts.length) {
+        c.append(el('b', { className: 'num', textContent: money(pnl) }), el('span', { className: 'num', textContent: num(rSum(ts)) + 'R' }),
+          el('span', { className: 'cal-t', textContent: ts.length === 1 ? 'עסקה אחת' : ts.length + ' עסקאות' }));
+        c.onclick = () => { $('#day').value = d; loadDayForms(); render(); showView('analyses'); };
+      }
+      grid.append(c);
+    }
+    const wk = list.filter(t => row.includes(t.date)), wpnl = wk.reduce((s, t) => s + pnlOf(t), 0);
+    grid.append(el('div', { className: 'cal-w' + (wk.length ? (wpnl > 0 ? ' pos' : wpnl < 0 ? ' neg' : '') : '') },
+      ...(wk.length ? [el('b', { className: 'num', textContent: money(wpnl) }), el('span', { className: 'num', textContent: num(rSum(wk)) + 'R' }),
+        el('span', { className: 'cal-t', textContent: (n => n === 1 ? 'יום אחד' : n + ' ימים')(new Set(wk.map(t => t.date)).size) })] : [el('span', { className: 'muted', textContent: '—' })])));
+  }
+  box.replaceChildren(grid);
 }
 // Where the money goes: the patterns from the review, counted for the chosen month.
 function renderLeaks(list) {
@@ -561,11 +649,12 @@ function showTip(e, text) {
 }
 const hideTip = () => { $('#tip').hidden = true; };
 
-function renderBars(sel, list, keysOf, order) {
+function renderBars(sel, list, keysOf, order, inR = false) {
   const groups = new Map();
+  const fmt = v => inR ? (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(2) + 'R' : money(v);
   list.forEach(t => keysOf(t).forEach(k => {
     const g = groups.get(k) || { n: 0, pnl: 0, wins: 0 };
-    const p = pnlOf(t); g.n++; g.pnl += p; if (p > 0) g.wins++;
+    const p = inR ? rOf(t) || 0 : pnlOf(t); g.n++; g.pnl += p; if (pnlOf(t) > 0) g.wins++;
     groups.set(k, g);
   }));
   let rows = [...groups.entries()];
@@ -578,11 +667,11 @@ function renderBars(sel, list, keysOf, order) {
     const bar = el('div', { className: 'bar ' + (g.pnl >= 0 ? 'p' : 'n') });
     bar.style.width = Math.abs(g.pnl) / max * 50 + '%';
     const track = el('div', { className: 'track' }, bar);
-    const tipText = `${k}: ${money(g.pnl)} · ${g.n} עסקאות · ${(g.wins / g.n * 100).toFixed(0)}% הצלחה`;
+    const tipText = `${k}: ${fmt(g.pnl)} · ${g.n} עסקאות · ${(g.wins / g.n * 100).toFixed(0)}% הצלחה`;
     track.addEventListener('pointermove', e => showTip(e, tipText));
     track.addEventListener('pointerleave', hideTip);
     wrap.append(el('div', { textContent: k }), track,
-      el('div', {}, el('span', { className: 'num', textContent: money(g.pnl) }),
+      el('div', {}, el('span', { className: 'num', textContent: fmt(g.pnl) }),
         el('span', { className: 'sub', textContent: ` · ${g.n} · ${(g.wins / g.n * 100).toFixed(0)}%` })));
   });
   box.replaceChildren(wrap);
@@ -824,13 +913,14 @@ function renderMonths() {
 function render() {
   const list = filtered();
   renderMonths(); renderPre(); renderAnalyses(); renderRules(); renderTable(list);
-  renderTiles(list); renderLeaks(list); renderPhase(); renderWeek(); renderScores(); renderEquity(list); renderDays();
+  renderTiles(list); renderCalendar(list); renderLeaks(list); renderPhase(); renderWeek(); renderScores(); renderEquity(list); renderDays();
   renderBars('#by-kept', list, t => [kindLabel(t)], [...Object.values(KIND), 'עמדתי בחוקים (לפני הסיווג)', 'לא סווג']);
   renderBars('#by-rule', list.filter(t => t.kept === false), t => (t.broken || []).length ? t.broken.map(b => 'חוק ' + b) : ['לא צוין']);
   renderBars('#by-dir', list, t => [DIR[t.dir] || '—'], ['לונג', 'שורט', 'ניטרלי']);
   renderBars('#by-mind', list.filter(t => t.mind), t => [qLabel('mind', t.mind)], Q.mind[1].map(o => o[1]));
   renderBars('#by-exit', list.filter(t => t.exit), t => [qLabel('exit', t.exit)], Q.exit[1].map(o => o[1]));
-  renderBars('#by-setup', list, t => [t.setup || 'לא צוין']);
+  const hours = [...new Set(list.filter(t => t.time).map(t => t.time.slice(0, 2)))].sort().map(h => `${h}:00–${h}:59`);
+  renderBars('#by-hour', list.filter(t => t.time), t => [`${t.time.slice(0, 2)}:00–${t.time.slice(0, 2)}:59`], hours, true);
   renderBars('#by-day', list, t => [DAYS[new Date(t.date + 'T12:00').getDay()]], DAYS);
 }
 async function refresh() {
@@ -862,6 +952,23 @@ async function init() {
   // pre-market
   $$('#bias button').forEach(b => b.onclick = () => saveDay(curDate(), { bias: dayOf(curDate()).bias === b.dataset.v ? '' : b.dataset.v }));
   $('#bias-text').addEventListener('change', e => saveDay(curDate(), { biasText: e.target.value.trim() }));
+  const toggle = (sel, key) => $$(sel + ' button').forEach(b => b.onclick = () =>
+    saveDay(curDate(), { [key]: dayOf(curDate())[key] === b.dataset.v ? null : b.dataset.v }));
+  toggle('#energy', 'energy');
+  toggle('#headspace', 'headspace');
+  for (const k of DAY_TEXT) $('#' + k).addEventListener('change', e => saveDay(curDate(), { [k]: e.target.value.trim() }));
+  const setHtfImage = async files => { if (files[0]) await saveDay(curDate(), { htfImage: await compress(files[0]) }); };
+  $('#htf-img').addEventListener('change', async e => { await setHtfImage(e.target.files); e.target.value = ''; });
+  acceptImages($('#htf-card'), setHtfImage);
+  const setAp = patch => saveDay(curDate(), { aplus: { ...(dayOf(curDate()).aplus || {}), ...patch } });
+  $$('#ap-status button').forEach(b => b.onclick = () => setAp({ status: (dayOf(curDate()).aplus || {}).status === b.dataset.v ? null : b.dataset.v }));
+  $('#ap-conf').addEventListener('change', e => setAp({ conf: e.target.value.trim() }));
+  $('#ap-rr').addEventListener('change', e => { const v = parseNum(e.target.value); setAp({ rr: v == null || isNaN(v) ? null : Math.abs(v) }); });
+  $('#ap-time').addEventListener('change', e => setAp({ time: e.target.value }));
+  $('#ap-why').addEventListener('change', e => setAp({ why: e.target.value.trim() }));
+  const setApImage = async files => { if (files[0]) await setAp({ image: await compress(files[0]) }); };
+  $('#ap-img').addEventListener('change', async e => { await setApImage(e.target.files); e.target.value = ''; });
+  acceptImages($('#ap-box'), setApImage);
   $$('#bias-result button').forEach(b => b.onclick = () =>
     saveDay(curDate(), { biasResult: dayOf(curDate()).biasResult === b.dataset.v ? null : b.dataset.v }));
   $('#review-text').addEventListener('change', e => saveDay(curDate(), { review: e.target.value.trim() }));
@@ -877,7 +984,7 @@ async function init() {
     const text = $('#sc-text').value.trim();
     if (!text && !scImage) { $('#sc-text').focus(); return; }
     const date = curDate(), list = dayOf(date).scenarios || [];
-    const s = { id: scEditing || uid(), type: getSeg('#sc-type') || 'long', text, image: scImage };
+    const s = { id: scEditing || uid(), type: getSeg('#sc-type') || 'long', text, image: scImage, inval: $('#sc-inval').value.trim() };
     const next = scEditing ? list.map(x => x.id === scEditing ? { ...x, ...s } : x) : [...list, s];
     resetScenarioForm();
     await saveDay(date, { scenarios: next });

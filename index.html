@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>יומן מסחר – משמעת ועקביות</title>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <header class="top">
@@ -29,22 +29,58 @@
 
   <!-- 1. Pre-market -->
   <section id="view-pre" class="view">
-    <div class="card">
-      <h2>הביאס שלי להיום</h2>
-      <div class="seg" id="bias">
-        <button type="button" data-v="long">לונג</button>
-        <button type="button" data-v="short">שורט</button>
-        <button type="button" data-v="neutral">ניטרלי</button>
+    <div class="card" id="mind-card">
+      <h2>1. מצב מנטלי</h2>
+      <div class="fgrid">
+        <label>שעות שינה <input type="text" id="sleep" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="7.5"></label>
+        <label>מצב רגשי (1–10) <input type="number" id="mood" min="1" max="10" step="1" inputmode="numeric"></label>
       </div>
-      <label>כמה מילים על הביאס <textarea id="bias-text" rows="2" placeholder="למה אני חושב ככה היום?"></textarea></label>
+      <div class="q"><span class="q-label">רמת אנרגיה</span>
+        <div class="seg" id="energy">
+          <button type="button" data-v="high">גבוהה</button>
+          <button type="button" data-v="mid">בינונית</button>
+          <button type="button" data-v="low">נמוכה</button>
+        </div>
+      </div>
+      <div class="q"><span class="q-label">אני בראש הנכון לעמוד בחוקים היום?</span>
+        <div class="seg" id="headspace">
+          <button type="button" data-v="yes">כן, צלול ומוכן לסחור לפי התוכנית</button>
+          <button type="button" data-v="no">לא. היום אני לא סוחר</button>
+        </div>
+      </div>
+      <div id="head-no" class="banner" hidden>היום לא סוחרים. לדלג על היום זה לעמוד בחוקים.</div>
+      <label>כמה מילים <textarea id="feeling" rows="2" placeholder="אכלתי? מה עובר לי בראש?"></textarea></label>
+    </div>
+
+    <div class="card" id="htf-card">
+      <h2>2. הקשר גבוה: מהיומי כלפי מטה</h2>
+      <div class="row">
+        <label class="btn">תמונת HTF (יומי / 4H) <input type="file" id="htf-img" accept="image/*" hidden></label>
+        <span class="muted hint">עם ה־FVG והנזילות מסומנים. אפשר לגרור או להדביק (Ctrl+V)</span>
+      </div>
+      <div id="htf-preview" class="thumbs"></div>
+      <div class="q"><span class="q-label">הביאס שלי להיום</span>
+        <div class="seg" id="bias">
+          <button type="button" data-v="long">לונג</button>
+          <button type="button" data-v="short">שורט</button>
+          <button type="button" data-v="neutral">ניטרלי</button>
+        </div>
+      </div>
+      <label>למה? <textarea id="bias-text" rows="2" placeholder="מה ביומי וב־4H אומר לי את זה?"></textarea></label>
+      <label>חדשות היום ושעות <input type="text" id="news" autocomplete="off" placeholder="למשל: CPI ב־15:30, אין חדשות אדומות"></label>
+      <label>Premium או Discount? אם לא, יש גבוה או נמוך שהסוויפ שלו יחזיר אותנו לשם?
+        <textarea id="pd" rows="2"></textarea></label>
+      <label>איפה הנזילות? איפה האינדוסמנט ואיפה הפקודות?
+        <textarea id="liq" rows="2"></textarea></label>
     </div>
     <div class="card" id="sc-card">
-      <h2 id="sc-title">תרחיש חדש</h2>
+      <h2 id="sc-title">3. תרחיש חדש</h2>
       <div class="seg" id="sc-type">
         <button type="button" data-v="long" aria-pressed="true">לונג</button>
         <button type="button" data-v="short">שורט</button>
       </div>
       <label>התרחיש <textarea id="sc-text" rows="3" placeholder="מאיפה אני לוקח את העסקה, ומה צריך לקרות לפני?"></textarea></label>
+      <label>מה מבטל את התרחיש? <input type="text" id="sc-inval" autocomplete="off" placeholder="למשל: סגירה של 15 דקות מתחת ל־X"></label>
       <div class="row">
         <label class="btn">צירוף תמונה <input type="file" id="sc-img" accept="image/*" hidden></label>
         <span class="muted hint">או לגרור תמונה לכאן / להדביק (Ctrl+V)</span>
@@ -57,7 +93,7 @@
     </div>
     <div id="sc-list" class="scenarios"></div>
     <div class="card" id="review-card">
-      <h2>אחרי הסשן: מה קרה בפועל?</h2>
+      <h2>4. אחרי הסשן: מה קרה בפועל?</h2>
       <div class="q"><span class="q-label">הביאס צדק?</span>
         <div class="seg" id="bias-result">
           <button type="button" data-v="yes">כן</button>
@@ -72,6 +108,24 @@
         <span class="muted hint">או לגרור תמונה לכאן / להדביק (Ctrl+V)</span>
       </div>
       <div id="rv-preview" class="thumbs"></div>
+      <h3>עסקת ה־A+ של היום</h3>
+      <div class="seg" id="ap-status">
+        <button type="button" data-v="taken">לקחתי אותה</button>
+        <button type="button" data-v="missed">לא לקחתי אותה</button>
+        <button type="button" data-v="none">לא היה A+ היום</button>
+      </div>
+      <div id="ap-box" hidden>
+        <div class="fgrid">
+          <label>קונפלואנסים <input type="text" id="ap-conf" autocomplete="off" placeholder="למשל: FVG 1H + SMT + סוויפ אסיה"></label>
+          <label>RR <input type="text" id="ap-rr" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="2.5"></label>
+          <label>שעת כניסה <input type="time" id="ap-time"></label>
+        </div>
+        <label id="ap-why-label">למה לא לקחתי אותה? <input type="text" id="ap-why" autocomplete="off"></label>
+        <div class="row">
+          <label class="btn">תמונה של עסקת ה־A+ <input type="file" id="ap-img" accept="image/*" hidden></label>
+        </div>
+        <div id="ap-preview" class="thumbs"></div>
+      </div>
     </div>
   </section>
 
@@ -95,11 +149,6 @@
         <ol id="rules-check" class="rules"></ol>
       </div>
       <div>
-        <div class="card">
-          <h2>איך אני מרגיש עכשיו</h2>
-          <label>מצב רגשי (1–10) <input type="number" id="mood" min="1" max="10" step="1" inputmode="numeric"></label>
-          <label>כמה מילים <textarea id="feeling" rows="3" placeholder="ישנתי? אכלתי? מה עובר לי בראש?"></textarea></label>
-        </div>
         <div class="card">
           <h2>דחף לכניסה חוזרת</h2>
           <p class="quote">הסטופ שלי הוא מידע, לא הזמנה.</p>
@@ -175,6 +224,7 @@
       </div>
     </div>
     <div class="tiles" id="tiles"></div>
+    <div class="card"><h2 id="cal-title">לוח החודש</h2><div id="calendar"></div></div>
     <div class="card"><h2>איפה הכסף הולך</h2><div id="leaks"></div></div>
     <div class="grid2">
       <div class="card"><h2 id="phase-title">התקדמות בשלב</h2><div id="phase"></div></div>
@@ -194,7 +244,7 @@
       <div class="card"><h2>רווח/הפסד: לונג מול שורט</h2><div id="by-dir"></div></div>
       <div class="card"><h2>רווח/הפסד לפי מה שעבר לי בראש</h2><div id="by-mind"></div></div>
       <div class="card"><h2>רווח/הפסד לפי איך יצאתי</h2><div id="by-exit"></div></div>
-      <div class="card"><h2>רווח/הפסד לפי סטאפ</h2><div id="by-setup"></div></div>
+      <div class="card"><h2>R לפי שעת כניסה</h2><div id="by-hour"></div></div>
       <div class="card"><h2>רווח/הפסד לפי יום בשבוע</h2><div id="by-day"></div></div>
     </div>
     <div class="card table-wrap"><table id="days-table">
@@ -239,6 +289,7 @@
         <label>כמה R <input type="text" name="r" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="מחושב לבד"></label>
       </div>
       <div id="risk-calc" class="calc"></div>
+      <label>קונפלואנסים <input name="setup" list="setups" autocomplete="off" placeholder="למשל: FVG 4H + SMT + סוויפ לונדון + iFVG"></label>
     </fieldset>
 
     <fieldset><legend>2. איזו עסקה זו?</legend>
@@ -281,7 +332,6 @@
     <details class="more">
       <summary>פרטים נוספים (לא חובה)</summary>
       <div class="fgrid">
-        <label>סטאפ <input name="setup" list="setups" autocomplete="off" placeholder="למשל: FVG שעתי + SMT"></label>
         <label>יחס מתוכנן (1:X) <input type="text" name="rr" dir="ltr" inputmode="decimal" autocomplete="off" placeholder="2"></label>
         <label>שעת יציאה <input type="time" name="exitTime"></label>
       </div>
@@ -299,6 +349,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

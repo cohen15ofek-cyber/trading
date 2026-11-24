@@ -175,3 +175,31 @@ fieldset .hint { margin: 0; font-size: 12px; }
 .an-sc-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
 .an-sc-body p { margin: 0; font-size: 14px; white-space: pre-wrap; }
 .an-sc-body .row { gap: 6px; }
+.inval { font-size: 13px; color: var(--neg); }
+.an-mind { margin: 0; font-size: 13px; color: var(--text2); }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(0, 1.15fr); gap: 6px; }
+.cal-h { text-align: center; font-size: 12px; color: var(--muted); font-weight: 600; }
+.cal-d, .cal-w { min-height: 78px; border: 1px solid var(--grid); border-radius: 8px; padding: 5px 7px;
+  display: flex; flex-direction: column; gap: 1px; font-size: 12px; background: var(--surface); overflow: hidden; }
+.cal-d.empty { background: transparent; border-style: dashed; }
+.cal-d.pos, .cal-w.pos { background: #eaf7ef; border-color: #bfe3cb; }
+.cal-d.neg, .cal-w.neg { background: #fdecee; border-color: #f1c2c5; }
+.cal-d.flat { background: var(--tint); }
+.cal-d.today { outline: 2px solid var(--accent); }
+.cal-d[title]:not(.empty) { cursor: default; }
+.cal-d.pos, .cal-d.neg, .cal-d.flat { cursor: pointer; }
+.cal-n { color: var(--muted); font-size: 11px; }
+.cal-d b, .cal-w b { font-size: 13px; }
+.cal-t { color: var(--muted); font-size: 11px; }
+.cal-w { background: var(--tint); }
+@media (max-width: 520px) {
+  .cal { gap: 3px; }
+  .cal-d, .cal-w { min-height: 62px; padding: 3px 4px; font-size: 10px; }
+  .cal-d b, .cal-w b { font-size: 10px; }
+  .cal-t { display: none; }
+}
+#head-no { margin: 0; }
+.cal-d b, .cal-d .num, .cal-w b, .cal-w .num { white-space: nowrap; }
+@media (max-width: 520px) {
+  .cal-d b, .cal-w b, .cal-d .num, .cal-w .num { font-size: 9px; letter-spacing: -0.2px; }
+}
