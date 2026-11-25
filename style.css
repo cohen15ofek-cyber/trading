@@ -247,3 +247,19 @@ fieldset .hint { margin: 0; font-size: 12px; }
   .kpi:not(:first-child) .kpi-vis { align-items: center; }
   .tiles#tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 }
+
+/* Tradovate import */
+label.btn.primary { background: var(--accent-d); border-color: var(--accent-d); color: #fff; font-weight: 600; }
+.banner.info { border-color: var(--accent); background: var(--tint); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  justify-content: space-between; font-weight: 500; }
+td.pending { color: var(--accent-d); font-weight: 650; }
+.tv-sum { margin: 0; font-weight: 600; }
+.tv-table { font-size: 12px; }
+.tv-table tr.tv-same td { color: var(--muted); }
+.tv-table tr.tv-merge td:last-child, .tv-table tr.tv-update td:last-child { color: var(--accent-d); font-weight: 600; }
+.tv-table tr.tv-new td:last-child { color: var(--pos); font-weight: 600; }
+#tv-preview { display: flex; flex-direction: column; gap: 10px; }
+#tv-preview:empty { display: none; }
+.tv-orphans { display: flex; flex-direction: column; gap: 6px; border: 1px solid #f1c2c5; background: #fff8f8; border-radius: 10px; padding: 10px 12px; }
+.tv-orphans p { margin: 0; font-weight: 500; }
+.tv-orphans label { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 13px; cursor: pointer; }

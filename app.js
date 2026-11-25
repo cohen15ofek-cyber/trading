@@ -120,6 +120,9 @@ function legacy(t) {
 const pnlOf = t => t.pnl != null ? t.pnl : legacy(t).pnl;
 const rOf = t => t.pnl != null ? t.r : legacy(t).r;
 const scoreOf = t => SCORE.reduce((s, [k, , p]) => s + (t.score && t.score[k] ? p : 0), 0);
+// An imported trade that hasn't been completed yet (no trade type, no rules answer).
+const pendingOf = t => t.src === 'tradovate' && t.kept == null && !t.kind;
+const scored = ts => ts.filter(t => !pendingOf(t));
 const money = v => (v < 0 ? '−' : v > 0 ? '+' : '') + '$' + Math.abs(v).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const num = (v, d = 2) => v == null || !isFinite(v) ? '—' : (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
 const cls = v => v > 0 ? 'pos-mark' : v < 0 ? 'neg-mark' : '';
@@ -189,7 +192,7 @@ function analyzeDay(date) {
   if (ts.length && gate.status === 'no') gate.nos.forEach(i => broken.add(i + 1));
   const skipped = !ts.length && gate.status === 'no';
   const flagged = ts.some(t => t.kept === false);
-  return { date, n: ts.length, losses, wins, bes, last: prev, pnl: cum, score: avg(ts.map(scoreOf)), day, gate, skipped,
+  return { date, n: ts.length, losses, wins, bes, last: prev, pnl: cum, score: avg(scored(ts).map(scoreOf)), day, gate, skipped,
     broken: [...broken].sort((a, b) => a - b), kept: skipped || (ts.length > 0 && !broken.size && !flagged && !gate.headNo) };
 }
 const inRange = date => month === 'all' || date.startsWith(month);
@@ -438,7 +441,7 @@ const keptText = ds => `${ds.filter(d => d.kept).length} מתוך ${ds.length}`;
 function renderPhase() {
   const all = processDays().filter(d => !S.start || d >= S.start).map(analyzeDay);
   const ds = all.filter(d => d.n);
-  const score = avg(trades.filter(t => !S.start || t.date >= S.start).map(scoreOf));
+  const score = avg(scored(trades.filter(t => !S.start || t.date >= S.start)).map(scoreOf));
   const riskBreaks = ds.reduce((s, d) => s + d.broken.filter(b => RISK_RULES.includes(b)).length, 0);
   const box = $('#phase');
   $('#phase-title').textContent = 'התקדמות בשלב ' + S.phase;
@@ -468,12 +471,12 @@ function renderWeek() {
   const counts = {};
   ds.forEach(d => d.broken.forEach(b => { counts[b] = (counts[b] || 0) + 1; }));
   const worst = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-  const best = [...ts].sort((a, b) => scoreOf(b) - scoreOf(a) || byTime(a, b))[0];
+  const best = scored(ts).sort((a, b) => scoreOf(b) - scoreOf(a) || byTime(a, b))[0];
   box.replaceChildren(kv([
     ['שבוע', `${from} עד ${to}`],
     ['ימים שעמדתי בחוקים', keptText(ds)],
     ['ימים שדילגתי', String(ds.filter(d => d.skipped).length)],
-    ['ציון ממוצע', ts.length ? avg(ts.map(scoreOf)).toFixed(0) : '—'],
+    ['ציון ממוצע', scored(ts).length ? avg(scored(ts).map(scoreOf)).toFixed(0) : '—'],
     ['החוק שנשבר הכי הרבה', worst ? `חוק ${worst[0]} (${worst[1]} ימים): ${RULES()[worst[0] - 1]}` : 'אף חוק לא נשבר'],
     ['העסקה הכי טובה בביצוע', best ? `${best.date} ${best.time || ''} · ${best.symbol} · ציון ${scoreOf(best)}` : '—'],
     ['רווח/הפסד', fmtU(sumU(ts)), 'num'],
@@ -529,7 +532,7 @@ function renderTiles(list) {
   const w = wins.length, l = losses.length, be = list.length - w - l;
   const gw = sumU(wins), gl = -sumU(losses);
   const avgW = w ? gw / w : 0, avgL = l ? gl / l : 0;
-  const sc = avg(list.map(scoreOf));
+  const sc = avg(scored(list).map(scoreOf));
   const ds = processDays().filter(inRange).map(analyzeDay);
   const dayVals = [...new Set(list.map(t => t.date))].map(d => sumU(list.filter(t => t.date === d)));
   const dw = dayVals.filter(v => v > 0).length, dl = dayVals.filter(v => v < 0).length, dbe = dayVals.length - dw - dl;
@@ -731,9 +734,19 @@ function renderBars(sel, list, keysOf, order, inR = unit === 'R') {
 }
 
 /* ---------- journal ---------- */
-const rulesLabel = t => t.kept === false ? '✗ ' + ((t.broken || []).length ? 'חוק ' + t.broken.join(', ') : 'נשבר חוק')
+const rulesLabel = t => pendingOf(t) ? '● להשלמה' : t.kept === false ? '✗ ' + ((t.broken || []).length ? 'חוק ' + t.broken.join(', ') : 'נשבר חוק')
   : t.kind === 'random' ? '~ סתם' : t.kind === 'plan' ? '✓ תוכנית' : t.kept === true ? '✓ עמדתי' : '—';
+function renderPending() {
+  const pend = trades.filter(pendingOf).sort(byTime);
+  const box = $('#pending');
+  box.hidden = !pend.length;
+  if (!pend.length) return;
+  box.replaceChildren(el('span', { textContent: (pend.length === 1 ? 'עסקה אחת מ־Tradovate מחכה' : pend.length + ' עסקאות מ־Tradovate מחכות')
+    + ' להשלמה: סוג העסקה, מה עבר לי בראש והסטופ. עד אז ' + (pend.length === 1 ? 'היא לא נכנסת' : 'הן לא נכנסות') + ' לציון.' }),
+    el('button', { type: 'button', className: 'primary', textContent: 'להשלמת הבאה', onclick: () => openForm(pend[0]) }));
+}
 function renderTable(list) {
+  renderPending();
   const body = $('#trades-table tbody');
   body.replaceChildren();
   $('#empty').hidden = list.length > 0;
@@ -748,8 +761,8 @@ function renderTable(list) {
     body.append(el('tr', {},
       td('#' + numbering.get(t.id), 'num muted'), td(t.date + (t.time ? ' ' + t.time : ''), 'num'), el('td', {}, el('span', { className: 'ltr', textContent: t.symbol }), ...(acctOf(t) === 'demo' ? [' ', el('span', { className: 'res demo', textContent: 'דמו' })] : [])), td(DIR[t.dir] || ''),
       el('td', {}, el('span', { className: 'res ' + resultOf(t)[0], textContent: resultOf(t)[1] })),
-      td(money(p), 'num ' + cls(p)), td(r == null ? '—' : num(r) + 'R', 'num'), td(String(scoreOf(t)), 'num'),
-      td(rulesLabel(t), t.kept === false ? 'warn' : t.kind === 'random' ? 'random' : t.kept === true ? 'ok' : ''),
+      td(money(p), 'num ' + cls(p)), td(r == null ? '—' : num(r) + 'R', 'num'), td(pendingOf(t) ? '—' : String(scoreOf(t)), 'num'),
+      td(rulesLabel(t), pendingOf(t) ? 'pending' : t.kept === false ? 'warn' : t.kind === 'random' ? 'random' : t.kept === true ? 'ok' : ''),
       el('td', { className: 'pic' }, ...(t.images && t.images.length ? [el('img', { src: t.images[0], alt: 'תמונת העסקה', title: 'לחץ להגדלה',
         onclick: () => view(t.images[0]) }), ...(t.images.length > 1 ? [el('span', { className: 'muted', textContent: ' +' + (t.images.length - 1) })] : [])] : ['—'])),
       actions));
@@ -759,6 +772,9 @@ function renderTable(list) {
       line('סוג העסקה', kindOf(t) ? kindLabel(t) + ((t.randomWhy || []).length
         ? ' · ' + t.randomWhy.map(w => (RANDOM_WHY.find(o => o[0] === w) || [, w])[1]).join(', ') : '') : '');
       line('טעויות בניהול', mistakesOf(t).map(m => (MISTAKES.find(o => o[0] === m) || [, m])[1]).join(' · '));
+      if (t.src === 'tradovate') line('מ־Tradovate', [t.entryPrice != null && `כניסה ${t.entryPrice} → יציאה ${t.exitPrice}`,
+        t.qty != null && `${t.qty} חוזים`, t.fees ? 'עמלות ' + money(-t.fees) : '', t.time && t.exitTime && `${t.time}–${t.exitTime}`,
+        t.tvAccount && 'חשבון ' + t.tvAccount].filter(Boolean).join(' · '));
       line('ניהול העסקה', [t.setup && 'סטאפ: ' + t.setup, t.qty != null && `${t.qty} חוזים`, t.stopPts != null && `סטופ ${t.stopPts} נק׳`, t.risk != null && 'סיכון: $' + t.risk, t.rr != null && 'יחס: 1:' + t.rr,
         t.exitTime && 'יציאה ב־' + t.exitTime, ...Object.keys(Q).filter(k => t[k]).map(k => `${Q[k][0]}: ${qLabel(k, t[k])}`)]
         .filter(Boolean).join(' · '));
@@ -787,6 +803,7 @@ function openForm(t) {
   e.time.value = t ? t.time || '' : new Date().toTimeString().slice(0, 5);
   // Account and size carry over from the last trade; new trades are MNQ (one micro is the plan).
   const sym = t ? t.symbol : 'MNQ';
+  if (sym && ![...e.symbol.options].some(o => o.value === sym)) e.symbol.append(new Option(sym, sym));
   e.symbol.value = [...e.symbol.options].some(o => o.value === sym) ? sym : 'MNQ';
   e.acct.value = t ? acctOf(t) : last ? acctOf(last) : 'real';
   e.qty.value = t ? t.qty ?? '' : last && last.qty != null ? last.qty : 1;
@@ -857,6 +874,7 @@ function readForm() {
     setup: e.setup.value.trim(), exitTime: e.exitTime.value, lesson: e.lesson.value.trim(),
     rr: okNum(e.rr.value) == null ? null : Math.abs(okNum(e.rr.value)),
     oldBroken: editing ? editing.oldBroken || [] : [],
+    ...(editing ? Object.fromEntries(['ext', 'src', 'entryPrice', 'exitPrice', 'fees', 'tvAccount'].filter(k => editing[k] != null).map(k => [k, editing[k]])) : {}),
     // The same facts in the fields the dashboard already reads.
     reentry: mistakes.includes('reentry') ? 'yes' : 'no', struct: mistakes.includes('against') ? 'against' : 'with',
     be: mistakes.includes('earlyBE') ? 'early' : null,
@@ -942,6 +960,288 @@ function toCsv(list) {
     pnlOf(t).toFixed(2), r == null ? '' : r.toFixed(2), scoreOf(t), t.kept == null ? '' : t.kept ? 'yes' : 'no',
     (t.broken || []).join('; '), kindOf(t) ? kindLabel(t) : '', (t.randomWhy || []).join('; '), mistakesOf(t).join('; '), ...Object.keys(Q).map(k => t[k] ? qLabel(k, t[k]) : ''), t.notes, t.lesson].map(q).join(','); });
   return '﻿' + [head.join(','), ...rows].join('\r\n');
+}
+
+/* ---------- import from Tradovate ---------- */
+// Dollars per point for the contracts a Tradovate file may hold.
+Object.assign(POINT_VALUE, { M2K: 5, RTY: 50, MYM: 0.5, YM: 5, MGC: 10, GC: 100, MCL: 100, CL: 1000 });
+const TV_ZONES = [['local', 'שעון המחשב שלך'], ['America/New_York', 'שעון ניו יורק'], ['America/Chicago', 'שעון שיקגו'], ['UTC', 'UTC']];
+let tvFile = null;    // executions read from the chosen file
+let tvState = {};     // zone, acct, fee, fileAcct, auto
+const tvGet = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+const tvSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+function parseCsv(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  text = text.replace(/^﻿/, '');
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; continue; }
+    if (c === '"') q = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim() !== ''));
+}
+const hkey = h => String(h).toLowerCase().replace(/[^a-z0-9]/g, '');
+const pad2 = n => String(n).padStart(2, '0');
+// "04/23/2024 09:11:54" (Tradovate), "4/23/24 9:11 PM", "2024-04-23 09:11:54", or ISO with a zone.
+function parseStamp(s, dmy) {
+  s = String(s || '').trim();
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(Z|[+-]\d{2}:?\d{2})?$/i.exec(s);
+  if (m) {
+    const st = { y: +m[1], mo: +m[2], d: +m[3], h: +m[4], mi: +m[5], s: +(m[6] || 0) };
+    if (m[7]) st.abs = Date.parse(s.replace(' ', 'T'));
+    return st;
+  }
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i.exec(s);
+  if (!m) return null;
+  const y = +m[3] < 100 ? 2000 + +m[3] : +m[3];
+  let h = +m[4]; if (m[7]) { h %= 12; if (/pm/i.test(m[7])) h += 12; }
+  const [mo, d] = dmy ? [+m[2], +m[1]] : [+m[1], +m[2]];
+  return { y, mo, d, h, mi: +m[5], s: +(m[6] || 0) };
+}
+function wallIn(zone, ms) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ms)).map(x => [x.type, x.value]));
+  return { y: +p.year, mo: +p.month, d: +p.day, h: +p.hour % 24, mi: +p.minute, s: +p.second };
+}
+const asUtc = w => Date.UTC(w.y, w.mo - 1, w.d, w.h, w.mi, w.s);
+// A time read in `zone`, as the clock on this computer shows it.
+function toLocal(st, zone) {
+  let w = st;
+  if (st.abs != null || zone !== 'local') {
+    let ms = st.abs;
+    if (ms == null) { const g = asUtc(st); ms = g - (asUtc(wallIn(zone, g)) - g); ms = g - (asUtc(wallIn(zone, ms)) - ms); }
+    const d = new Date(ms);
+    w = { y: d.getFullYear(), mo: d.getMonth() + 1, d: d.getDate(), h: d.getHours(), mi: d.getMinutes(), s: d.getSeconds() };
+  }
+  return { date: `${w.y}-${pad2(w.mo)}-${pad2(w.d)}`, time: `${pad2(w.h)}:${pad2(w.mi)}`, key: asUtc(w) };
+}
+const rootOf = (product, contract) => {
+  const p = String(product || '').trim().toUpperCase();
+  if (p) return p;
+  const c = String(contract || '').trim().toUpperCase(), m = /^([A-Z0-9]+?)[FGHJKMNQUVXZ]\d{1,2}$/.exec(c);
+  return m ? m[1] : c;
+};
+const cmpId = (a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
+
+// Reads an Orders (or Fills / Performance) export into executions: one row per fill.
+function tvRead(text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) throw new Error('empty');
+  const head = rows[0].map(hkey);
+  const col = (...names) => { for (const n of names) { const i = head.indexOf(n); if (i >= 0) return i; } return -1; };
+  const cell = (r, ...idx) => { for (const i of idx) if (i >= 0 && r[i] != null && String(r[i]).trim() !== '') return String(r[i]).trim(); return ''; };
+  const raw = [];
+  let kind;
+  if (col('buyprice') >= 0 && col('sellprice') >= 0 && col('boughttimestamp') >= 0 && col('soldtimestamp') >= 0) {
+    // Performance: each row is a buy fill paired with a sell fill; split it back into the two fills.
+    kind = 'Performance';
+    const c = { sym: col('symbol', 'contract'), qty: col('qty', 'quantity'), bp: col('buyprice'), sp: col('sellprice'),
+      bt: col('boughttimestamp'), stt: col('soldtimestamp'), bid: col('buyfillid'), sid: col('sellfillid'), acct: col('account') };
+    rows.slice(1).forEach((r, i) => {
+      const qty = Math.abs(parseNum(cell(r, c.qty)));
+      if (!qty) return;
+      const base = { acct: cell(r, c.acct), contract: cell(r, c.sym), root: rootOf('', cell(r, c.sym)), qty };
+      raw.push({ ...base, side: 1, price: parseNum(cell(r, c.bp)), t: cell(r, c.bt), id: cell(r, c.bid) || 'b' + i });
+      raw.push({ ...base, side: -1, price: parseNum(cell(r, c.sp)), t: cell(r, c.stt), id: cell(r, c.sid) || 's' + i });
+    });
+  } else {
+    kind = 'Orders';
+    const c = { side: col('bs', 'side', 'buysell', 'action'), qty: col('filledqty', 'fillqty', 'qty', 'quantity'),
+      price: [col('avgprice'), col('avgfillprice'), col('decimalfillavg'), col('fillprice'), col('price')],
+      time: [col('filltime'), col('timestamp'), col('time'), col('datetime')], contract: col('contract', 'symbol'), product: col('product'),
+      status: col('status'), acct: col('account'), id: col('orderid', 'fillid', 'id') };
+    if (c.side < 0 || c.qty < 0 || c.price.every(i => i < 0) || c.time.every(i => i < 0) || (c.contract < 0 && c.product < 0)) throw new Error('format');
+    for (const r of rows.slice(1)) {
+      const status = cell(r, c.status), side = cell(r, c.side), qty = Math.abs(parseNum(cell(r, c.qty)));
+      if (status && !/fill/i.test(status)) continue;          // canceled, rejected, working
+      if (!/^(b|s)/i.test(side) || !qty || isNaN(qty)) continue;
+      raw.push({ acct: cell(r, c.acct), contract: cell(r, c.contract) || cell(r, c.product), root: rootOf(cell(r, c.product), cell(r, c.contract)),
+        side: /^b/i.test(side) ? 1 : -1, qty, price: parseNum(cell(r, ...c.price)), t: cell(r, ...c.time), id: cell(r, c.id) || String(raw.length) });
+    }
+  }
+  // Day-first dates only if some date can't be month-first.
+  const dmy = raw.some(x => { const m = /^(\d{1,2})\/(\d{1,2})\//.exec(x.t); return m && +m[1] > 12; });
+  const execs = raw.map(x => ({ ...x, st: parseStamp(x.t, dmy) })).filter(x => x.st && isFinite(x.price));
+  if (!execs.length) throw new Error('nofills');
+  return { kind, execs, accounts: [...new Set(execs.map(x => x.acct).filter(Boolean))] };
+}
+
+// Pairs fills into trades: a trade runs from flat to flat, per account and contract.
+function tvTrades(execs, zone, fee) {
+  const xs = execs.map(x => ({ ...x, at: toLocal(x.st, zone) })).sort((a, b) => a.at.key - b.at.key || cmpId(a.id, b.id));
+  const books = new Map(), out = [];
+  for (const x of xs) {
+    const k = x.acct + '|' + x.contract;
+    const b = books.get(k) || { pos: 0, lots: [], cur: null };
+    books.set(k, b);
+    let q = x.qty;
+    while (q > 0) {
+      if (b.pos === 0 || Math.sign(b.pos) === x.side) {
+        if (!b.cur) b.cur = { acct: x.acct, root: x.root, dir: x.side > 0 ? 'long' : 'short', start: x, end: x,
+          openQty: 0, openVal: 0, closeQty: 0, closeVal: 0, pts: 0, maxPos: 0, ids: new Set() };
+        b.lots.push({ qty: q, price: x.price });
+        b.pos += x.side * q;
+        b.cur.openQty += q; b.cur.openVal += q * x.price; b.cur.maxPos = Math.max(b.cur.maxPos, Math.abs(b.pos)); b.cur.ids.add(x.id);
+        q = 0;
+      } else {
+        const lot = b.lots[0], c = Math.min(q, lot.qty);
+        b.cur.pts += (x.price - lot.price) * c * (b.pos > 0 ? 1 : -1);
+        b.cur.closeQty += c; b.cur.closeVal += c * x.price; b.cur.end = x; b.cur.ids.add(x.id);
+        lot.qty -= c; q -= c; b.pos += x.side * c;
+        if (!lot.qty) b.lots.shift();
+        if (b.pos === 0) { out.push(b.cur); b.cur = null; }
+      }
+    }
+  }
+  const round = (v, n) => Math.round(v * 10 ** n) / 10 ** n;
+  const trades = out.map(c => {
+    const pv = POINT_VALUE[c.root];
+    const gross = pv ? round(c.pts * pv, 2) : null, fees = round((fee || 0) * c.closeQty, 2);
+    return { key: 'tv:' + c.acct + ':' + [...c.ids].sort(cmpId).join('-'), acct: c.acct, symbol: c.root, dir: c.dir,
+      date: c.start.at.date, time: c.start.at.time, exitTime: c.end.at.time, qty: c.maxPos, contracts: c.closeQty,
+      entryPrice: round(c.openVal / c.openQty, 4), exitPrice: round(c.closeVal / c.closeQty, 4),
+      gross, fees, pnl: gross == null ? null : round(gross - fees, 2) };
+  });
+  const open = [...books.values()].filter(b => b.pos !== 0).length;
+  return { trades, open };
+}
+
+// What each imported trade does in the journal: new, joins a trade logged by hand, updates, or is already there.
+function tvPlan(list) {
+  const used = new Set();
+  return list.map(x => {
+    const near = t => mins(t.time) == null || mins(x.time) == null ? Infinity : Math.abs(mins(t.time) - mins(x.time));
+    let target = trades.find(t => t.ext === x.key && !used.has(t.id));
+    if (!target) target = trades.filter(t => !used.has(t.id) && t.date === x.date && t.dir === x.dir && acctOf(t) === tvState.acct
+      && (t.ext ? t.src === 'tradovate' && near(t) <= 1 && t.exitTime === x.exitTime : near(t) <= 10))
+      .sort((a, b) => near(a) - near(b))[0];
+    if (target) used.add(target.id);
+    let action = !target ? 'new' : target.ext ? 'update' : 'merge';
+    if (action === 'update' && target.pnl === x.pnl && target.qty === x.qty && target.time === x.time && target.exitTime === x.exitTime
+      && target.ext === x.key && target.fees === x.fees) action = 'same';
+    return { x, action, target };
+  });
+}
+function tvCurrent() {
+  const all = tvTrades(tvFile.execs, tvState.zone, tvState.fee);
+  const list = all.trades.filter(x => tvState.fileAcct === 'all' || x.acct === tvState.fileAcct);
+  return { list, open: all.open, plan: tvPlan(list) };
+}
+async function tvOpen(file) {
+  const box = $('#tv-preview');
+  try { tvFile = tvRead(await file.text()); }
+  catch (err) {
+    tvFile = null;
+    box.replaceChildren(el('p', { className: 'warn', textContent: err.message === 'nofills'
+      ? 'לא נמצאו בקובץ עסקאות שבוצעו (רק פקודות שבוטלו או ממתינות).'
+      : 'הקובץ לא נראה כמו דוח Orders של Tradovate. ודא שהורדת מהלשונית Orders. אם זה כן הקובץ הנכון, שלח לי אותו ואתאים את הייבוא.' }));
+    return;
+  }
+  // The file doesn't say which clock it uses: pick the one that lines up with trades already in the journal.
+  const remembered = tvGet('tj-tz', 'local');
+  const last = trades.length ? [...trades].sort(byTime).at(-1) : null;
+  tvState = { acct: last ? acctOf(last) : 'real', fileAcct: 'all', fee: Math.max(0, parseNum(tvGet('tj-fee', '0')) || 0), del: new Set() };
+  const fits = TV_ZONES.map(([z]) => [z, tvPlan(tvTrades(tvFile.execs, z, 0).trades).filter(p => p.action !== 'new').length])
+    .sort((a, b) => b[1] - a[1] || (a[0] === remembered ? -1 : b[0] === remembered ? 1 : 0));
+  Object.assign(tvState, { zone: fits[0][1] > 0 ? fits[0][0] : remembered, auto: fits[0][1] > 0 });
+  tvRender();
+}
+function tvRender() {
+  const box = $('#tv-preview');
+  if (!tvFile) { box.replaceChildren(); return; }
+  const { list, open, plan } = tvCurrent();
+  const dates = list.map(x => x.date).sort();
+  const sel = (label, value, opts, onChange) => el('label', {}, label, (() => {
+    const s = el('select', {}, ...opts.map(([v, t]) => el('option', { value: v, textContent: t })));
+    s.value = value; s.onchange = () => onChange(s.value); return s;
+  })());
+  const feeInput = el('input', { type: 'text', inputMode: 'decimal', dir: 'ltr', value: tvState.fee ? String(tvState.fee) : '', placeholder: '0' });
+  feeInput.onchange = () => { tvState.fee = Math.max(0, parseNum(feeInput.value) || 0); tvSet('tj-fee', String(tvState.fee)); tvRender(); };
+  const controls = el('div', { className: 'fgrid' },
+    sel('השעות בקובץ לפי' + (tvState.auto ? ' (זוהה אוטומטית)' : ''), tvState.zone, TV_ZONES,
+      v => { tvState.zone = v; tvState.auto = false; tvSet('tj-tz', v); tvRender(); }),
+    sel('חשבון ביומן', tvState.acct, [['real', 'אמיתי'], ['demo', 'דמו']], v => { tvState.acct = v; tvRender(); }),
+    ...(tvFile.accounts.length > 1 ? [sel('חשבון בקובץ', tvState.fileAcct, [['all', 'כל החשבונות'], ...tvFile.accounts.map(a => [a, a])],
+      v => { tvState.fileAcct = v; tvRender(); })] : []),
+    el('label', {}, 'עמלה לחוזה, הלוך וחזור ($)', feeInput));
+  const count = a => plan.filter(p => p.action === a).length;
+  const n = { new: count('new'), merge: count('merge'), update: count('update'), same: count('same') };
+  const unknown = list.filter(x => x.pnl == null).length;
+  const what = p => p.action === 'new' ? 'חדשה'
+    : p.action === 'merge' ? `תתחבר לעסקה #${numbering.get(p.target.id)} שרשמת (${p.target.time})`
+    : p.action === 'update' ? `תתעדכן (#${numbering.get(p.target.id)})` : 'כבר ביומן';
+  const td = (t, c = '') => el('td', { className: c, textContent: t });
+  const table = el('div', { className: 'table-wrap' }, el('table', { className: 'tv-table' },
+    el('thead', {}, el('tr', {}, ...['תאריך', 'כניסה', 'יציאה', 'מדד', 'כיוון', 'חוזים', 'מחיר כניסה', 'מחיר יציאה', 'רווח/הפסד', 'ביומן'].map(h => el('th', { textContent: h })))),
+    el('tbody', {}, ...plan.map(p => el('tr', { className: 'tv-' + p.action },
+      td(fmtDate(p.x.date), 'num'), td(p.x.time, 'num'), td(p.x.exitTime, 'num'), td(p.x.symbol, 'ltr'), td(DIR[p.x.dir]),
+      td(String(p.x.qty), 'num'), td(String(p.x.entryPrice), 'num'), td(String(p.x.exitPrice), 'num'),
+      td(p.x.pnl == null ? 'לא ידוע' : money(p.x.pnl), 'num ' + cls(p.x.pnl || 0)), td(what(p)))))));
+  const linked = new Set(plan.filter(p => p.target).map(p => p.target.id));
+  // Only days the file has trades on: there a hand-logged trade may already be part of an imported one.
+  const fileDays = new Set(dates);
+  const orphans = trades.filter(t => !t.ext && acctOf(t) === tvState.acct && fileDays.has(t.date) && !linked.has(t.id)).sort(byTime);
+  for (const id of [...tvState.del]) if (!orphans.some(t => t.id === id)) tvState.del.delete(id);
+  const todo = n.new + n.merge + n.update + tvState.del.size;
+  const go = el('button', { type: 'button', className: 'primary', disabled: !todo || unknown > 0,
+    textContent: todo ? 'ייבוא: ' + [n.new && (n.new === 1 ? 'עסקה חדשה אחת' : n.new + ' עסקאות חדשות'),
+      n.merge + n.update && (n.merge + n.update === 1 ? 'עדכון אחד' : n.merge + n.update + ' עדכונים'),
+      tvState.del.size && (tvState.del.size === 1 ? 'מחיקה אחת' : tvState.del.size + ' מחיקות')].filter(Boolean).join(' · ') : 'אין מה לייבא' });
+  go.onclick = async () => {
+    const res = await tvApply(plan);
+    tvFile = null;
+    const lastDate = dates.at(-1);
+    if (lastDate) month = lastDate.slice(0, 7);
+    await refresh();
+    box.replaceChildren(el('p', { className: 'ok', textContent: [res.added === 1 ? 'נוספה עסקה חדשה אחת' : `נוספו ${res.added} עסקאות חדשות`,
+      res.updated === 1 ? 'עודכנה אחת' : `עודכנו ${res.updated}`, res.deleted ? (res.deleted === 1 ? 'נמחקה אחת כפולה' : `נמחקו ${res.deleted} כפולות`) : '']
+      .filter(Boolean).join(', ') + '.' }),
+      ...(res.added ? [el('p', { textContent: 'עכשיו נשאר להשלים אותן ביומן: סוג העסקה, מה עבר לי בראש והסטופ.' })] : []),
+      el('button', { type: 'button', className: 'primary', textContent: 'ליומן', onclick: () => showView('journal') }));
+  };
+  box.replaceChildren(
+    el('p', { className: 'tv-sum' }, `${tvFile.kind}: ${list.length === 1 ? 'עסקה סגורה אחת' : list.length + ' עסקאות סגורות'}`,
+      ...(dates.length ? [' · ', el('span', { className: 'num', textContent: `${fmtDate(dates[0])}–${fmtDate(dates.at(-1))}` })] : []),
+      ...(tvFile.accounts.length ? [' · חשבון ', el('span', { className: 'ltr', textContent: tvFile.accounts.join(', ') })] : [])),
+    ...(open ? [el('p', { className: 'muted', textContent: 'יש בסוף הקובץ פוזיציה שעוד לא נסגרה. היא תיכנס בייבוא הבא, אחרי שתיסגר.' })] : []),
+    ...(unknown ? [el('p', { className: 'warn', textContent: 'יש בקובץ חוזה שאני לא יודע כמה שווה בו נקודה. שלח לי את הקובץ ואוסיף אותו.' })] : []),
+    controls,
+    table,
+    ...(orphans.length ? [el('div', { className: 'tv-orphans' },
+      el('p', { className: 'warn', textContent: 'עסקאות שרשמת ביד בימים האלה ולא נמצאו בקובץ. אם עסקה כזו כבר כלולה בעסקה מהקובץ '
+        + '(למשל כשהוספת חוזה לפוזיציה פתוחה), סמן אותה למחיקה כדי שלא תיספר פעמיים:' }),
+      ...orphans.map(t => el('label', {}, el('input', { type: 'checkbox', checked: tvState.del.has(t.id),
+        onchange: e => { e.target.checked ? tvState.del.add(t.id) : tvState.del.delete(t.id); tvRender(); } }),
+        `#${numbering.get(t.id)} · ${fmtDate(t.date)} ${t.time || ''} · ${DIR[t.dir] || ''} · ${money(pnlOf(t))}`)))] : []),
+    el('div', { className: 'row end' }, el('button', { type: 'button', className: 'ghost', textContent: 'ביטול', onclick: () => { tvFile = null; tvRender(); } }), go));
+}
+async function tvApply(plan) {
+  let added = 0, updated = 0;
+  for (const { x, action, target } of plan) {
+    if (action === 'same') continue;
+    const facts = { ext: x.key, src: 'tradovate', date: x.date, time: x.time, exitTime: x.exitTime, symbol: x.symbol, dir: x.dir,
+      qty: x.qty, pnl: x.pnl, fees: x.fees, entryPrice: x.entryPrice, exitPrice: x.exitPrice, tvAccount: x.acct };
+    if (target) {
+      const t = { ...target, ...facts };
+      // A stop written by hand gives the real R with the exact result.
+      if (t.stopPts != null) { t.risk = t.stopPts * (POINT_VALUE[t.symbol] || 2) * (t.qty || 1); t.r = Math.round(t.pnl / t.risk * 100) / 100; }
+      if (t.kind) t.score = scoreFrom(t);
+      await put('trades', t); updated++;
+    } else {
+      await put('trades', { id: uid(), rv: RULES_VERSION, ...facts, acct: tvState.acct, r: null, risk: null, stopPts: null,
+        kind: null, kept: null, broken: [], randomWhy: [], mind: null, mistakes: [], hit: null, notes: '', images: [],
+        setup: '', lesson: '', rr: null, score: {}, oldBroken: [] });
+      added++;
+    }
+  }
+  let deleted = 0;
+  for (const id of tvState.del) { await store('trades', 'readwrite', s => s.delete(id)); deleted++; }
+  return { added, updated, deleted };
 }
 
 /* ---------- render ---------- */
@@ -1078,6 +1378,10 @@ async function init() {
   // A file dropped outside a drop area must not replace the page.
   ['dragover', 'drop'].forEach(ev => addEventListener(ev, e => e.preventDefault()));
   $('#viewer').addEventListener('click', () => $('#viewer').close());
+
+  // import from Tradovate
+  $('#tv-file').addEventListener('change', async e => { const f = e.target.files[0]; if (f) await tvOpen(f); e.target.value = ''; });
+  $('#tv-go').onclick = () => { showView('data'); $('#tv-card').scrollIntoView({ block: 'start' }); };
 
   // backup
   $('#btn-export').onclick = () => download(`trading-journal-${localDate()}.json`,

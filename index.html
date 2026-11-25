@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>יומן מסחר – משמעת ועקביות</title>
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 <header class="top">
@@ -15,7 +15,7 @@
     <button role="tab" data-view="rules" aria-selected="false">החוקים שלי</button>
     <button role="tab" data-view="journal" aria-selected="false">יומן</button>
     <button role="tab" data-view="summary" aria-selected="false">סיכום</button>
-    <button role="tab" data-view="data" aria-selected="false">גיבוי</button>
+    <button role="tab" data-view="data" aria-selected="false">ייבוא וגיבוי</button>
   </nav>
   <button id="btn-new" class="primary">+ עסקה חדשה</button>
 </header>
@@ -202,7 +202,9 @@
       <label>חודש <select class="month-select" id="m-journal"></select></label>
       <label>חשבון <select class="acct-select"><option value="all">הכול</option><option value="real">אמיתי</option><option value="demo">דמו</option></select></label>
       <span id="month-count" class="muted"></span>
+      <button type="button" id="tv-go" class="ghost">ייבוא מ־Tradovate</button>
     </div>
+    <div id="pending" class="banner info" hidden></div>
     <div class="card table-wrap">
       <table id="trades-table">
         <thead><tr>
@@ -258,6 +260,20 @@
 
   <!-- 5. Backup -->
   <section id="view-data" class="view" hidden>
+    <div class="card" id="tv-card">
+      <h2>ייבוא עסקאות מ־Tradovate</h2>
+      <ol class="plain">
+        <li>בפלטפורמה של Tradovate במחשב: לחץ על החץ ליד שם החשבון, ואז על גלגל השיניים (⚙). נפתח Account Reports.</li>
+        <li>בחר את הלשונית <b>Orders</b> (לא Performance).</li>
+        <li>בחר טווח תאריכים, לחץ Go, ואז Download Report.</li>
+        <li>בחר כאן את הקובץ שירד. היומן יראה לך מה ייכנס לפני שהוא שומר משהו.</li>
+      </ol>
+      <p class="muted hint">בטלפון Tradovate לא מוריד קובץ עסקאות, אז את הייצוא עושים מהמחשב. הקובץ לא כולל עמלות: אפשר להכניס עמלה לחוזה, והיא תרד מהרווח של כל עסקה.</p>
+      <div class="row">
+        <label class="btn primary">בחירת קובץ מ־Tradovate <input type="file" id="tv-file" accept=".csv,text/csv" hidden></label>
+      </div>
+      <div id="tv-preview"></div>
+    </div>
     <div class="card">
       <h2>גיבוי ושחזור</h2>
       <p class="muted">הנתונים נשמרים בדפדפן הזה בלבד. מומלץ לייצא גיבוי באופן קבוע.</p>
@@ -353,6 +369,6 @@
 
 <dialog id="viewer"><img id="viewer-img" alt="תמונה מוגדלת"></dialog>
 <div id="tip" class="tip" hidden></div>
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
