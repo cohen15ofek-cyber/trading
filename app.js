@@ -759,7 +759,7 @@ function renderTable(list) {
       el('button', { className: 'link', textContent: 'מחיקה', onclick: async () => {
         if (confirm('למחוק את העסקה?')) { await store('trades', 'readwrite', s => s.delete(t.id)); await refresh(); } } }));
     body.append(el('tr', {},
-      td('#' + numbering.get(t.id), 'num muted'), td(t.date + (t.time ? ' ' + t.time : ''), 'num'), el('td', {}, el('span', { className: 'ltr', textContent: t.symbol }), ...(acctOf(t) === 'demo' ? [' ', el('span', { className: 'res demo', textContent: 'דמו' })] : [])), td(DIR[t.dir] || ''),
+      td('#' + numbering.get(t.id), 'num muted'), td(DAYS[new Date(t.date + 'T12:00').getDay()]), td(t.date + (t.time ? ' ' + t.time : ''), 'num'), el('td', {}, el('span', { className: 'ltr', textContent: t.symbol }), ...(acctOf(t) === 'demo' ? [' ', el('span', { className: 'res demo', textContent: 'דמו' })] : [])), td(DIR[t.dir] || ''),
       el('td', {}, el('span', { className: 'res ' + resultOf(t)[0], textContent: resultOf(t)[1] })),
       td(money(p), 'num ' + cls(p)), td(r == null ? '—' : num(r) + 'R', 'num'), td(pendingOf(t) ? '—' : String(scoreOf(t)), 'num'),
       td(rulesLabel(t), pendingOf(t) ? 'pending' : t.kept === false ? 'warn' : t.kind === 'random' ? 'random' : t.kept === true ? 'ok' : ''),
@@ -767,7 +767,7 @@ function renderTable(list) {
         onclick: () => view(t.images[0]) }), ...(t.images.length > 1 ? [el('span', { className: 'muted', textContent: ' +' + (t.images.length - 1) })] : [])] : ['—'])),
       actions));
     if (openDetail === t.id) {
-      const cell = el('td', { colSpan: 11 });
+      const cell = el('td', { colSpan: 12 });
       const line = (k, v) => v ? cell.append(el('p', {}, el('b', { textContent: k + ': ' }), v)) : null;
       line('סוג העסקה', kindOf(t) ? kindLabel(t) + ((t.randomWhy || []).length
         ? ' · ' + t.randomWhy.map(w => (RANDOM_WHY.find(o => o[0] === w) || [, w])[1]).join(', ') : '') : '');
